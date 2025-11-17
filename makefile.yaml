@@ -94,10 +94,7 @@ Prefixes:
   my_genome:
     Path:  /NatureUsers/ltursunova/hare_work/sra/och.fasta
 
- SRR10011650:
-   SRR10011650:
-    Path:  /NatureUsers/ltursunova/hare_work/sra/SRR10011650*fastq
-  SRR10011651:
+ My files:#проверить как пишется
    SRR10011651:
     Path:  /NatureUsers/ltursunova/hare_work/sra/SRR10011651*fastq
   SRR10011652:
@@ -208,11 +205,11 @@ Prefixes:
   1k:
    1k:
     Path:  /NatureUsers/ltursunova/hare_work/sra/1k*fastq
-  2k*S2:
-   2k*S2:
+  2k_S2:
+   2k_S2:
     Path:  /NatureUsers/ltursunova/hare_work/sra/2k*S2*fastq
-  2k*S3:
-   2k*S3:
+  2k_S3:
+   2k_S3:
     Path:  /NatureUsers/ltursunova/hare_work/sra/2k*S3*fastq
   3k:
    3k:
@@ -220,9 +217,9 @@ Prefixes:
   4k:
    4k:
     Path:  /NatureUsers/ltursunova/hare_work/sra/4k*fastq
-  5k*S7:
-   5k*S7:
+  5k_S7:
+   5k_S7:
     Path:  /NatureUsers/ltursunova/hare_work/sra/5k*S7*fastq
-  5k*S8:
-   5k*S8:
+  5k_S8:
+   5k_S8:
     Path:  /NatureUsers/ltursunova/hare_work/sra/5k*S8*fastq
