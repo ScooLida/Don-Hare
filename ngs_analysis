@@ -59,6 +59,10 @@ vcftools --vcf re12_oc_miss3.vcf.recode.vcf --max-missing-count 0 --recode --out
 ############################################################################################################
 # удаление особи
 vcftools --remove-indv YOUR_INDIVIDUALS_NAME --vcf your_snps.vcf --recode --out your_filtered_snps.vcf
+# оставление ток ожной особи 
+vcftools --indv YOUR_INDIVIDUALS_NAME --vcf your_snps.vcf --recode --out your_filtered_snps.vcf
+
+
 vcftools --vcf renamed.vcf --max-missing-count 3 --recode --out re1_miss3.vcf
 
 
