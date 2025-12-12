@@ -11,50 +11,82 @@ rsync --copy-links --recursive --times --verbose rsync://ftp.ncbi.nlm.nih.gov/ge
 paleomix bam run makefile.yaml --max-threads 15
 
 # форматирование samtools
-samtools faidx ref.fa
-samtools view -bt ~/cow/oc2_genome.fa.fai -@ 12 -o z1_1207.bam z1.sam
-samtools flagstat -@ 10 z1_1207.bam > z1_1207.txt 
-samtools sort lep.bam -o lep_sort.bam
-samtools index lep_sort.bam
-bcftools mpileup -f ~/cow/oc2_genome.fa rd_z3_sort.bam | bcftools call -mv -Oz -o rd_z3.vcf.gz
+#samtools faidx ref.fa
+#samtools view -bt ~/cow/oc2_genome.fa.fai -@ 12 -o MyFilename.my_genome.bam mY_1212.sam
+#samtools flagstat -@ 10 z1_1207.bam > z1_1207.txt 
+samtools sort MyFilename.my_genome.bam -o mY_1212_sort.bam
+samtools index mY_1212_sort.bam
+bcftools mpileup -f ~/hare_work/sra/och.fasta ~/hare_work/mY_1212_sort.bam | bcftools call -mv -Oz -o mY_1212.vcf.gz
 
-#фильтрация
-bcftools filter out.vcf.gz -s LowQual -e 'QUAL<20 && DP<10' > filtered.vcf
-
-#статистика
-samtools flagstat -@ 10 dna.bam > flagstat.txt 
+#удаление списка с малым количеством ридов
+vcftools --remove disgard.txt --vcf mY_1212.vcf.gz --recode --recode-INFO-all --stdout | bgzip -c > mY_1212_.vcf.gz
 
 #соединяет vcf файлы
-tabix -p vcf zz1.vcf.gz
-vcf-merge zz1.vcf.gz zz4.vcf.gz zz5.vcf.gz | bgzip -c > Allzz.vcf.gz
+tabix -p vcf mY_1212_.vcf.gz
+tabix -p vcf mY2_1212.vcf.gz
+vcf-merge mY2_1212.vcf.gz mY_1212_.vcf.gz | bgzip -c > All_1212.vcf.gz
 
-#чистит от мультиаллельных локусов, оставляет 1-2
-bcftools view  -M2 -v snps input.vcf.gz
+#фильтрация
+bcftools filter All_1212.vcf.gz -s LowQual -e 'QUAL<20 && DP<10' > filtered_1212.vcf | bgzip -c > All.vcf.gz
+tabix -p vcf All.vcf.gz
 
 #удаляет все кроме нужных
-bcftools view test.vcf.gz --regions NC_080855.1 -o test1.vcf
-gzip -dk SRR10011655.vcf.gz
-bcftools concat  test4.vcf.gz test5.vcf.gz -n -o  test10.vcf.gz
+bcftools view All.vcf.gz --regions NC_080832.1  -o   NC_080832.1.vcf.gz
+bcftools view All.vcf.gz --regions NC_080833.1  -o   NC_080833.1.vcf.gz
+bcftools view All.vcf.gz --regions NC_080834.1  -o  NC_080834.1.vcf.gz
+bcftools view All.vcf.gz --regions NC_080835.1  -o NC_080835.1.vcf.gz
+bcftools view All.vcf.gz --regions NC_080836.1  -o   NC_080836.1.vcf.gz
+bcftools view All.vcf.gz --regions NC_080837.1  -o  NC_080837.1.vcf.gz
+bcftools view All.vcf.gz --regions NC_080838.1  -o  NC_080838.1.vcf.gz
+bcftools view All.vcf.gz --regions NC_080839.1  -o  NC_080839.1.vcf.gz
+bcftools view All.vcf.gz --regions NC_080840.1  -o  NC_080840.1.vcf.gz
+bcftools view All.vcf.gz --regions NC_080841.1  -o  NC_080841.1.vcf.gz
+bcftools view All.vcf.gz --regions NC_080842.1  -o  NC_080842.1.vcf.gz
+bcftools view All.vcf.gz --regions NC_080843.1  -o  NC_080843.1.vcf.gz
+bcftools view All.vcf.gz --regions NC_080844.1  -o  NC_080844.1.vcf.gz
+bcftools view All.vcf.gz --regions NC_080845.1  -o  NC_080845.1.vcf.gz
+bcftools view All.vcf.gz --regions NC_080846.1  -o   NC_080846.1.vcf.gz
+bcftools view All.vcf.gz --regions NC_080847.1  -o   NC_080847.1.vcf.gz
+bcftools view All.vcf.gz --regions NC_080848.1  -o NC_080848.1.vcf.gz
+bcftools view All.vcf.gz --regions NC_080849.1  -o NC_080849.1.vcf.gz
+bcftools view All.vcf.gz --regions NC_080850.1  -o  NC_080850.1.vcf.gz
+bcftools view All.vcf.gz --regions NC_080851.1  -o  NC_080851.1.vcf.gz
+bcftools view All.vcf.gz --regions NC_080852.1  -o  NC_080852.1.vcf.gz
+bcftools view All.vcf.gz --regions NC_080853.1  -o  NC_080853.1.vcf.gz
+bcftools view All.vcf.gz --regions NC_080854.1  -o   NC_080854.1.vcf.gz
+bcftools view All.vcf.gz --regions NC_080855.1  -o  NC_080855.1.vcf.gz
+bcftools view All.vcf.gz --regions NC_080856.1  -o  NC_080856.1.vcf.gz
+bcftools view All.vcf.gz --regions NC_080857.1  -o  NC_080857.1.vcf.gz
+bcftools view All.vcf.gz --regions NC_080858.1  -o  NC_080858.1.vcf.gz
+bcftools view All.vcf.gz --regions NC_080859.1  -o   NC_080859.1.vcf.gz
+bcftools view All.vcf.gz --regions NC_080860.1  -o  NC_080860.1.vcf.gz
+bcftools view All.vcf.gz --regions NC_080861.1  -o   NC_080861.1.vcf.gz
+bcftools view All.vcf.gz --regions NC_080862.1  -o  NC_080862.1.vcf.gz
+bcftools view All.vcf.gz --regions NC_080863.1  -o  NC_080863.1.vcf.gz
+bcftools view All.vcf.gz --regions NC_080864.1  -o   NC_080864.1.vcf.gz
+bcftools view All.vcf.gz --regions NC_080865.1  -o   NC_080865.1.vcf.gz
+bcftools view All.vcf.gz --regions NC_080866.1  -o NC_080866.1.vcf.gz
 
+#соединяем только хромосомы(чтобы ненамапенное не попалось)
+bcftools concat   NC_080832.1.vcf.gz NC_080833.1.vcf.gz NC_080834.1.vcf.gz NC_080835.1.vcf.gz NC_080836.1.vcf.gz NC_080837.1.vcf.gz NC_080838.1.vcf.gz NC_080839.1.vcf.gz NC_080840.1.vcf.gz NC_080841.1.vcf.gz NC_080842.1.vcf.gz NC_080843.1.vcf.gz NC_080844.1.vcf.gz NC_080845.1.vcf.gz NC_080846.1.vcf.gz NC_080847.1.vcf.gz NC_080848.1.vcf.gz NC_080849.1.vcf.gz NC_080850.1.vcf.gz NC_080851.1.vcf.gz NC_080852.1.vcf.gz NC_080853.1.vcf.gz NC_080854.1.vcf.gz NC_080855.1.vcf.gz NC_080856.1.vcf.gz NC_080857.1.vcf.gz NC_080858.1.vcf.gz NC_080859.1.vcf.gz NC_080860.1.vcf.gz NC_080861.1.vcf.gz NC_080862.1.vcf.gz NC_080863.1.vcf.gz NC_080864.1.vcf.gz NC_080865.1.vcf.gz NC_080866.1.vcf.gz -o CHR.vcf.gz
+# оставляю не больше двух аллелей, так plink требует
+bcftools view  -M2 -v snps CHR.vcf.gz -o chr2.vcf.gz
+#разархивирую
+gzip -dk chr2.vcf.gz
+#переименолвываю хромосомы
+sed 's/NC_080832.1/832/; s/NC_080833.1/833/; s/NC_080834.1/834/; s/NC_080835.1/835/; s/NC_080836.1/836/; s/NC_080837.1/837/; s/NC_080838.1/838/; s/NC_080839.1/839/; s/NC_080840.1/840/; s/NC_080841.1/841/; s/NC_080842.1/842/; s/NC_080843.1/843/; s/NC_080844.1/844/; s/NC_080845.1/845/; s/NC_080846.1/846/; s/NC_080847.1/847/; s/NC_080848.1/848/; s/NC_080849.1/849/; s/NC_080850.1/850/; s/NC_080851.1/851/; s/NC_080852.1/852/; s/NC_080853.1/853/; s/NC_080854.1/854/; s/NC_080855.1/855/; s/NC_080856.1/856/; s/NC_080857.1/857/; s/NC_080858.1/858/; s/NC_080859.1/859/; s/NC_080860.1/860/; s/NC_080861.1/861/; s/NC_080862.1/862/; s/NC_080863.1/863/; s/NC_080864.1/864/; s/NC_080865.1/865/; s/NC_080866.1/866/;' chr2.vcf > chr_1212.vcf
 
 #получаем нужные bim fam bed
-~/plink --vcf out.vcf  --allow-extra-chr --make-bed --out  1307
+~/plink --vcf chr_1212.vcf  --allow-extra-chr --make-bed --out  1212
 
 #выполняем pca
-~/plink --bfile 1407 --pca 4 --allow-extra-chr --bad-freqs  --out pcagen
+~/plink --bfile 1212 --pca 4 --allow-extra-chr --bad-freqs  --out pcagen
 
-
-vcftools --vcf re12_oc_miss3.vcf.recode.vcf --max-missing-count 0 --recode --out re12_oc_miss0.vcf
+vcftools --vcf chr_1212.vcf --max-missing-count 0 --recode --out chr_1212_miss0.vcf
 
 #abba-baba
-~/Dsuite/Build/Dsuite Dtrios rename3_oc.vcf SETS3.txt --KS-test-for-homoplasy
+~/Dsuite/Build/Dsuite Dtrios chr_1212_miss0.vcf SETS.txt 
 
-
-~/angsd/angsd -doAbbababa 1 -bam new1.txt -out angst1 -doCounts 1 -anc ~/cow/newS/och.fasta -minMapQ 30 -minQ 30 -blockSize 5000000
-
-
-
-~/admixure/dist/admixture_linux-1.3.0/admixture renamed32.bed 5
 
 ############################################################################################################
 # удаление особи
