@@ -19,7 +19,9 @@ samtools index mY_1212_sort.bam
 bcftools mpileup -f ~/hare_work/sra/och.fasta ~/hare_work/mY_1212_sort.bam | bcftools call -mv -Oz -o mY_1212.vcf.gz
 
 #удаление списка с малым количеством ридов
-vcftools --remove disgard.txt --vcf mY_1212.vcf.gz --recode --recode-INFO-all --stdout | bgzip -c > mY_1212_.vcf.gz
+vcftools --remove disgard.txt --gzvcf mY_1212.vcf.gz --recode --recode-INFO-all --stdout | bgzip -c > mY_1212_.vcf.gz
+
+
 
 #соединяет vcf файлы
 tabix -p vcf mY_1212_.vcf.gz
@@ -27,7 +29,7 @@ tabix -p vcf mY2_1212.vcf.gz
 vcf-merge mY2_1212.vcf.gz mY_1212_.vcf.gz | bgzip -c > All_1212.vcf.gz
 
 #фильтрация
-bcftools filter All_1212.vcf.gz -s LowQual -e 'QUAL<20 && DP<10' > filtered_1212.vcf | bgzip -c > All.vcf.gz
+bcftools filter All_1212.vcf.gz -s LowQual -e 'QUAL<20 || DP<10' -O z -o All.vcf.gz
 tabix -p vcf All.vcf.gz
 
 #удаляет все кроме нужных
