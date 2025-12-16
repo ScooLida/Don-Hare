@@ -82,7 +82,7 @@ sed 's/NC_080832.1/832/; s/NC_080833.1/833/; s/NC_080834.1/834/; s/NC_080835.1/8
 ~/plink --vcf chr_1212.vcf  --allow-extra-chr --make-bed --out  1212
 
 #выполняем pca
-~/plink --bfile 1212 --pca 4 --allow-extra-chr --bad-freqs  --out pcagen
+~/plink --bfile 1212 --pca 4 --allow-extra-chr --out pcagen
 
 vcftools --vcf chr_1212.vcf --max-missing-count 0 --recode --out chr_1212_miss0.vcf
 
