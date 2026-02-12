@@ -20,9 +20,8 @@ busco -i hare_assembly.fasta -o busco_hare_results -l mammalia_odb10 -m genome -
 
     -c 16: количество ядер (на сервере можно ставить 16, 32 или больше, чтобы было быстрее).
 
+grep -v "^#" ref_busco_krol/run_glires_odb10/full_table.tsv | awk -F '\t' '$2 == "Complete" {print $3"\t"($4 < $5 ? $4 : $5)"\t"($4 < $5 ? $5 : $4)"\t"$1}' > busco_genes.bed
 
-pip install busco2bed
-busco2bed -i full_table.tsv -o busco_genes.bed
 reference.fasta (индексирован: samtools faidx reference.fasta).
 
     your_data.vcf.gz (индексирован: bcftools index your_data.vcf.gz).
@@ -34,6 +33,8 @@ reference.fasta (индексирован: samtools faidx reference.fasta).
     Важный момент по формату: Если в вашем BED-файле колонок больше (например, 6), а в read вы написали только 4, то всё, что идет после 4-й колонки, Bash «свалит» в последнюю переменную (gene). Для нашей задачи это не страшно, но если колонок меньше, скрипт может работать неправильно.
 
 Хотите проверить, сколько реально колонок в вашем BED-файле, чтобы мы убедились, что скрипт их правильно прочитает? Можете прислать первые две-три строки из него (команда head -n 3 busco_genes.bed).
+bcftools query -l ./send/my_now.vcf.gz > samples.txt
+
 #!/bin/bash
 
 # --- НАСТРОЙКИ ---
