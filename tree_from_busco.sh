@@ -25,8 +25,25 @@ bcftools query -l ./send/my_now.vcf.gz > samples.txt
  conda install -c bioconda mafft
  
 #мафт
-./busco.2.py
+mkdir -p short_genes
+# Копируем только те файлы, которые весят меньше 50 Кб (примерно)
+find ortholog_groups/ -name "*.fasta" -size -50k -exec cp {} short_genes/ \;
+echo "Отобрано генов: $(ls short_genes | wc -l)"
+
+mkdir -p aligned_short
+ls short_genes/*.fasta | xargs -I {} -P 4 sh -c '
+    out="aligned_short/$(basename {})"
+    mafft --quiet --retree 1 --6merpair {} > "$out"
+    echo "Готово: {}"
+'
+
 #суперматрица (можно программно)
 ./busco.3.py
 
 iqtree -s supermatrix.fasta -p partitions.txt -B 1000 -nm 200 -T 10
+
+#ИЛИ
+mashtree --sketch-size 10000 --mindepth 0 *.fasta > orthotree.dnd
+ #   --mindepth 0: Обязательно добавьте это, если вы подаете на вход уже очищенные FASTA (сборки), а не сырые чтения. Это скажет программе доверять каждому нуклеотиду.
+ #   --sketch-size 10000: Сделает «отпечаток» более детальным.
+mashtree ortholog_groups/*.fasta > tree.nwk
