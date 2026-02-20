@@ -158,3 +158,17 @@ ls -l /home/users/sofa/big_drive
 
 # Проверить права на запись (создать тестовый файл через ссылку)
 touch /home/users/sofa/big_drive/test.txt
+
+#!/bin/bash
+while read -r name; do
+
+get_organelle_from_reads.py \
+    -1 "${name}"_1.fastq \
+    -2 "${name}"_2.fastq \
+    -o "${name}"_mt \
+    -R 15 \
+    -k 21,45,65,85,105 \
+    -F animal_mt \
+    -t 8
+echo "${name} done"
+done < list_m.txt
