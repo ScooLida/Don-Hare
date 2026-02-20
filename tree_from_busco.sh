@@ -1,11 +1,10 @@
-source ~/.bashrc
+#source ~/.bashrc
 
- my_now.vcf.gz - выравнивание на пищуху, фастк дамп, весь пул
+ #my_now.vcf.gz - выравнивание на пищуху, фастк дамп, весь пул
  
- mY_0502_sort.bam - четыре или сколько там оставшихся до дерева на пищуху
+ #mY_0502_sort.bam - четыре или сколько там оставшихся до дерева на пищуху
 
- conda install -c bioconda mafft
- 
+
  
 busco -i hare_assembly.fasta -o busco_hare_results -l mammalia_odb10 -m genome -c 16
 #  -i: ваш входной файл генома (в FASTA).
@@ -23,6 +22,8 @@ bcftools query -l ./send/my_now.vcf.gz > samples.txt
 #чета там
 ./busco.1.py
 
+ conda install -c bioconda mafft
+ 
 #мафт
 ./busco.2.py
 #суперматрица (можно программно)
