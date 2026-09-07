@@ -7,24 +7,24 @@ shopt -s nullglob globstar
 
 # ---------- Edit these paths ----------
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
-REF="/NatureUsers/ltursunova/hare_work/myto_hare.fasta"
-PCG_BED="$SCRIPT_DIR/for_data/scr_31_hare_l_europaeus_NC_004028.1_PCGs.bed"
-BAM_ROOT="/NatureUsers/ltursunova/hare_work/MyHare_myto/my_genome"
-SAMPLE_LIST="/NatureUsers/ltursunova/hare_work/list_myto.txt"
+REF="${REF:-/NatureUsers/ltursunova/hare_work/myto_hare.fasta}"
+PCG_BED="${PCG_BED:-$SCRIPT_DIR/for_data/scr_31_hare_l_europaeus_NC_004028.1_PCGs.bed}"
+BAM_ROOT="${BAM_ROOT:-/NatureUsers/ltursunova/hare_work/MyHare_myto/my_genome}"
+SAMPLE_LIST="${SAMPLE_LIST:-/NatureUsers/ltursunova/hare_work/list_myto.txt}"
 
 # Set this only when it is a BAM for one biological sample. Leave empty when
 # all BAMs are already under BAM_ROOT. A merged multi-sample BAM must first be
 # split by read-group/sample (SM tag), otherwise it will be called as one sample.
-COMBINED_BAM=""
+COMBINED_BAM="${COMBINED_BAM:-}"
 
-OUT="/NatureUsers/ltursunova/hare_work/mito_pcg_analysis"
-THREADS=8
+OUT="${OUT:-/NatureUsers/ltursunova/hare_work/mito_pcg_analysis}"
+THREADS="${THREADS:-8}"
 
 # Ancient-DNA consensus filters. Adjust to the experiment if necessary.
-MIN_MQ=25
-MIN_BQ=20
-MIN_DP=2
-MIN_QUAL=30
+MIN_MQ="${MIN_MQ:-25}"
+MIN_BQ="${MIN_BQ:-20}"
+MIN_DP="${MIN_DP:-2}"
+MIN_QUAL="${MIN_QUAL:-30}"
 
 # ASTRAL jar available on sy2. It can be overridden at runtime:
 # ASTRAL_JAR=/actual/path/astral.jar bash scr_31_mito_pcg_astral.sh
@@ -119,6 +119,8 @@ fi
 [[ -s "$SAMPLE_LIST" ]] || die "Sample list not found: $SAMPLE_LIST"
 [[ -s "$ASTRAL_JAR" ]] || die "ASTRAL jar not found: $ASTRAL_JAR"
 
+# Intermediate files are deliberately retained for concatenated analysis,
+# troubleshooting, and reproducibility. This script never cleans OUT.
 mkdir -p "$OUT" "$OUT/vcf" "$OUT/consensus" "$OUT/gene_fastas" \
     "$OUT/alignments" "$OUT/gene_trees" "$OUT/astral"
 

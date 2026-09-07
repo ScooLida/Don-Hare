@@ -91,6 +91,32 @@ of gene trees and an all-sample species tree using the same modern-selected
 loci after ancient sequences have been added. The second tree is a combined
 inference and may change the topology; it is not formal fixed-tree placement.
 
+## Line 3: Mitochondrial PCG Analysis
+
+### `scr_30_mito_pipeline.sh`
+
+Runs the mitochondrial stage in order:
+
+1. `scr_31_mito_pcg_astral.sh` calls variants, creates masked consensus
+   sequences, extracts the 13 PCGs, aligns them, and builds the per-PCG trees
+   plus the ASTRAL tree.
+2. `scr_32_mito_pcg_concat.sh` concatenates the 13 retained PCG alignments
+   using one partition per gene and builds the primary ML tree.
+
+All intermediate data are retained under `OUT`: `vcf`, `consensus`,
+`gene_fastas`, `alignments`, `gene_trees`, and `astral`. The launcher refuses
+to overwrite a partial existing output. Set `REBUILD=1` only for an intentional
+rerun from BAM files.
+
+Run on the compute environment with the default `/NatureUsers` paths:
+
+```bash
+bash scr_30_mito_pipeline.sh
+```
+
+Paths can be overridden through `REF`, `BAM_ROOT`, `SAMPLE_LIST`, `OUT`, and
+`PCG_BED` environment variables.
+
 ## Other Files
 
 ### `scr_98_sex.sh`
