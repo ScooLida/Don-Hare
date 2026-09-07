@@ -65,6 +65,7 @@ python3 "$SCRIPT_DIR/concat_fasta_partitions.py" \
 
 "$IQTREE_CMD" \
     -s "$CONCAT_DIR/pcg_concat.fa" \
+    -st DNA \
     -p "$CONCAT_DIR/pcg_partitions.txt" \
     -m MFP \
     -B "$BOOTSTRAPS" \
