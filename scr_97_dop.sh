@@ -51,7 +51,11 @@ printf "K\tCV_error\n" > "$CV_TABLE"
 for K in $(seq "$K_MIN" "$K_MAX"); do
     log_file="${MODERN_ADMIX_PREFIX}_K${K}.log"
     if [ ! -s "$MODERN_ADMIX_PREFIX.$K.P" ] || [ ! -s "$MODERN_ADMIX_PREFIX.$K.Q" ] || ! grep -q 'CV error' "$log_file" 2>/dev/null; then
-        "$ADMIXTURE" -j"$ADMIXTURE_THREADS" --cv "$MODERN_ADMIX_PREFIX.bed" "$K" > "$log_file" 2>&1
+        (
+            cd "$ANALYSIS_DIR"
+            "$ADMIXTURE" -j"$ADMIXTURE_THREADS" --cv "$(basename "$MODERN_ADMIX_PREFIX").bed" "$K" \
+                > "$(basename "$log_file")" 2>&1
+        )
     fi
     cv_error=$(awk '/CV error/ { value=$NF } END { print value }' "$log_file")
     if [ -z "$cv_error" ]; then
@@ -108,8 +112,11 @@ printf '%s\n' "$BEST_K" > "$ANALYSIS_DIR/with_all_samples_optimal_K.txt"
 PROJECTION_LOG="$ANALYSIS_DIR/with_all_samples_projection_K${BEST_K}.log"
 PROJECTION_Q="$ALL_ADMIX_PREFIX.${BEST_K}.Q"
 if [ ! -s "$PROJECTION_Q" ]; then
-    "$ADMIXTURE" -j"$ADMIXTURE_THREADS" -P "$ALL_ADMIX_PREFIX.bed" "$BEST_K" \
-        > "$PROJECTION_LOG" 2>&1
+    (
+        cd "$ANALYSIS_DIR"
+        "$ADMIXTURE" -j"$ADMIXTURE_THREADS" -P "$(basename "$ALL_ADMIX_PREFIX").bed" "$BEST_K" \
+            > "$(basename "$PROJECTION_LOG")" 2>&1
+    )
 fi
 if [ ! -s "$PROJECTION_Q" ]; then
     echo "Error: projection Q file was not generated: $PROJECTION_Q" >&2

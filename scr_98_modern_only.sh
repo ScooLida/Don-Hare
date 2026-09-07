@@ -60,7 +60,11 @@ for K in $(seq "$K_MIN" "$K_MAX"); do
     log_file="${MODERN_ADMIX_PREFIX}_K${K}.log"
     if [ ! -s "$MODERN_ADMIX_PREFIX.$K.P" ] || [ ! -s "$MODERN_ADMIX_PREFIX.$K.Q" ] || ! grep -q 'CV error' "$log_file" 2>/dev/null; then
         echo "Starting modern ADMIXTURE K=$K"
-        "$ADMIXTURE" -j"$ADMIXTURE_THREADS" --cv "$MODERN_ADMIX_PREFIX.bed" "$K" > "$log_file" 2>&1
+        (
+            cd "$ANALYSIS_DIR"
+            "$ADMIXTURE" -j"$ADMIXTURE_THREADS" --cv "$(basename "$MODERN_ADMIX_PREFIX").bed" "$K" \
+                > "$(basename "$log_file")" 2>&1
+        )
     else
         echo "Using existing modern ADMIXTURE K=$K result."
     fi
