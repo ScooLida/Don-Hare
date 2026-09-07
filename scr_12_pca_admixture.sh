@@ -31,11 +31,13 @@ prepare_dataset() {
 
     if [ "$label" = "modern" ]; then
         "$PLINK" --vcf "$input_vcf" --geno "$MISSINGNESS" --make-bed \
+            --set-missing-var-ids '@:#_$1_$2' \
             --threads "$PLINK_THREADS" --out "$prefix" --allow-extra-chr
     else
         # The VCF already contains modern-selected sites. Do not filter on
         # missing ancient genotypes here.
         "$PLINK" --vcf "$input_vcf" --make-bed \
+            --set-missing-var-ids '@:#_$1_$2' \
             --threads "$PLINK_THREADS" --out "$prefix" --allow-extra-chr
     fi
 
