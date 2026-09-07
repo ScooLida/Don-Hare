@@ -29,6 +29,7 @@ build_gene_tree() {
         return 1
     fi
     if [ -s "${prefix}.treefile" ]; then
+        echo "Using existing gene tree: $gene" >&2
         return 0
     fi
 
@@ -52,7 +53,7 @@ build_gene_tree() {
     ' "$input" > "$iqtree_input"
 
     if ! iqtree -s "$iqtree_input" -st DNA -m "$MODEL" -nt 1 \
-        --prefix "$prefix" -quiet; then
+        --prefix "$prefix"; then
         rm -f "$iqtree_input"
         return 1
     fi
