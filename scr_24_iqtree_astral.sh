@@ -5,10 +5,11 @@
 set -euo pipefail
 
 # Configuration
-THREADS=9
+# Usage: bash scr_24_iqtree_astral.sh [parallel_jobs]
+THREADS="${1:-9}"
 WORK_DIR="./subset_parallel/pipeline_bulletproof_final"
 MODEL="GTR+G"
-ASTRAL_JAR="$HOME/Astral/astral.5.16.3.jar"
+ASTRAL_JAR="${ASTRAL_JAR:-$HOME/Astral/astral.5.7.8.jar}"
 GAP_THRESHOLD=30
 DATASET_MODERN="modern"
 DATASET_WITH_ALL="with_all_samples"
@@ -21,6 +22,7 @@ build_gene_tree() {
     local trees_dir="$WORK_DIR/gene_trees_${dataset}"
     local input="$align_dir/${gene}.fasta"
     local prefix="$trees_dir/$gene"
+    local iqtree_input="$trees_dir/.${gene}.iqtree.fasta"
 
     if [ ! -s "$input" ]; then
         echo "Error: alignment not found or empty: $input" >&2
@@ -29,8 +31,32 @@ build_gene_tree() {
     if [ -s "${prefix}.treefile" ]; then
         return 0
     fi
-    iqtree -s "$input" -st DNA -m "$MODEL" -nt 1 \
-        --prefix "$prefix" -quiet
+
+    # IQ-TREE rejects records made entirely of missing data. Omit only those
+    # records; missing taxa are valid in the other gene trees.
+    awk '
+        function write_record(   informative) {
+            if (header == "") return
+            informative = sequence
+            gsub(/[Nn?-.]/, "", informative)
+            if (informative != "") print header "\n" sequence
+        }
+        /^>/ {
+            write_record()
+            header = $0
+            sequence = ""
+            next
+        }
+        { sequence = sequence $0 }
+        END { write_record() }
+    ' "$input" > "$iqtree_input"
+
+    if ! iqtree -s "$iqtree_input" -st DNA -m "$MODEL" -nt 1 \
+        --prefix "$prefix" -quiet; then
+        rm -f "$iqtree_input"
+        return 1
+    fi
+    rm -f "$iqtree_input"
 }
 
 if [ "${1:-}" = "__gene_tree" ]; then
@@ -75,7 +101,8 @@ build_dataset_trees() {
         return 1
     fi
 
-    java -jar "$ASTRAL_JAR" -i "$all_trees" -o "$astral_output" \
+    java -Xshare:off -Djava.io.tmpdir="${TMPDIR:-$HOME/tmp}" \
+        -jar "$ASTRAL_JAR" -i "$all_trees" -o "$astral_output" \
         2> "$WORK_DIR/astral_${dataset}.log"
     echo "Species tree saved to: $astral_output"
 }
