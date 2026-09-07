@@ -38,7 +38,7 @@ build_gene_tree() {
         function write_record(   informative) {
             if (header == "") return
             informative = sequence
-            gsub(/[Nn?-.]/, "", informative)
+            gsub(/[Nn?.-]/, "", informative)
             if (informative != "") print header "\n" sequence
         }
         /^>/ {
