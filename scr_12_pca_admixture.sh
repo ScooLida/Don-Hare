@@ -10,6 +10,7 @@ MODERN_VCF="${DATA_PREFIX}_modern.vcf.gz"
 ALL_VCF="${DATA_PREFIX}_with_all_samples.vcf.gz"
 ANALYSIS_DIR="./population_analysis"
 PLINK="$HOME/plink"
+PLINK2="${PLINK2:-$HOME/plink2}"
 ADMIXTURE="$HOME/admixture/dist/admixture_linux-1.3.0/admixture"
 PLINK_THREADS=8
 ADMIXTURE_THREADS=4
@@ -29,6 +30,8 @@ prepare_dataset() {
         return 1
     fi
 
+    echo "${label} VCF variants: $(bcftools index -n "$input_vcf")"
+
     if [ "$label" = "modern" ]; then
         "$PLINK" --vcf "$input_vcf" --geno "$MISSINGNESS" --make-bed \
             --set-missing-var-ids '@:#_$1_$2' \
@@ -41,8 +44,7 @@ prepare_dataset() {
             --threads "$PLINK_THREADS" --out "$prefix" --allow-extra-chr
     fi
 
-    "$PLINK" --bfile "$prefix" --pca "$PCA_COMPONENTS" \
-        --threads "$PLINK_THREADS" --allow-extra-chr --out "$prefix"
+    echo "${label} PLINK variants after conversion: $(wc -l < "${prefix}.bim")"
 }
 
 run_modern_admixture() {
@@ -60,22 +62,61 @@ run_modern_admixture() {
         fi
     done
 
-    best_k=$(awk 'NR > 1 && $2 != "" { print }' "$cv_table" |
-        sort -k2,2n | head -n 1 | cut -f1)
-    if [ -z "$best_k" ]; then
-        echo "Error: could not determine optimal K for modern samples." >&2
+    echo "ADMIXTURE completed for K=${K_MIN}..${K_MAX}; K will be selected manually from the CV plot."
+}
+
+run_pca_projection() {
+    local modern_prefix="$ANALYSIS_DIR/modern"
+    local all_prefix="$ANALYSIS_DIR/with_all_samples"
+    local pca_prefix="$ANALYSIS_DIR/modern_pca"
+    local projection_prefix="$ANALYSIS_DIR/with_all_samples_pca_projection"
+    local score_end=$((5 + PCA_COMPONENTS))
+
+    if [ ! -x "$PLINK2" ]; then
+        echo "Error: PLINK 2 is required for PCA projection: $PLINK2" >&2
+        echo "Set PLINK2=/path/to/plink2 or install it at $HOME/plink2." >&2
+        return 1
+    fi
+    if ! cmp -s "${modern_prefix}.bim" "${all_prefix}.bim"; then
+        echo "Error: modern and all-sample PLINK SNP sets differ." >&2
         return 1
     fi
 
-    echo "$best_k" > "$ANALYSIS_DIR/modern_optimal_K.txt"
-    echo "Optimal K for modern samples: $best_k"
+    "$PLINK2" --bfile "$modern_prefix" --freq counts \
+        --pca allele-wts "$PCA_COMPONENTS" vcols=chrom,ref,alt \
+        --out "$pca_prefix"
+    "$PLINK2" --bfile "$all_prefix" --read-freq "${pca_prefix}.acount" \
+        --score "${pca_prefix}.eigenvec.allele" 2 5 header-read \
+        no-mean-imputation variance-standardize \
+        --score-col-nums "6-${score_end}" --out "$projection_prefix"
+
+    python3 - "$projection_prefix.sscore" "$ANCIENT_SAMPLES" \
+        "$ANALYSIS_DIR/ancient_pca_projection.tsv" <<'PY'
+import sys
+
+score_file, ancient_text, output_file = sys.argv[1:]
+ancient = set(ancient_text.split(","))
+with open(score_file) as source:
+    header = source.readline().rstrip("\n").split("\t")
+    clean_header = [value.lstrip("#") for value in header]
+    iid_index = clean_header.index("IID")
+    pc_indices = [i for i, value in enumerate(clean_header) if value.endswith("_AVG")]
+    with open(output_file, "w") as output:
+        output.write("sample\t" + "\t".join(clean_header[i] for i in pc_indices) + "\n")
+        for line in source:
+            fields = line.rstrip("\n").split("\t")
+            if fields[iid_index] in ancient:
+                output.write(fields[iid_index] + "\t" + "\t".join(fields[i] for i in pc_indices) + "\n")
+PY
+
+    echo "Modern PCA reference: ${pca_prefix}.eigenvec"
+    echo "All-sample PCA projection: ${projection_prefix}.sscore"
+    echo "Ancient PCA projection: $ANALYSIS_DIR/ancient_pca_projection.tsv"
 }
 
 project_all_samples() {
     local modern_prefix="$ANALYSIS_DIR/modern"
     local all_prefix="$ANALYSIS_DIR/with_all_samples"
-    local best_k
-    best_k=$(tr -d '[:space:]' < "$ANALYSIS_DIR/modern_optimal_K.txt")
 
     # Projection requires identical SNP IDs and order in both datasets.
     if ! cmp -s "${modern_prefix}.bim" "${all_prefix}.bim"; then
@@ -83,21 +124,20 @@ project_all_samples() {
         return 1
     fi
 
-    cp "${modern_prefix}.${best_k}.P" "${all_prefix}.${best_k}.P.in"
-    cp "$ANALYSIS_DIR/modern_optimal_K.txt" \
-        "$ANALYSIS_DIR/with_all_samples_optimal_K.txt"
-    projection_log="$ANALYSIS_DIR/with_all_samples_projection_K${best_k}.log"
-    "$ADMIXTURE" -j"$ADMIXTURE_THREADS" -P "$all_prefix.bed" "$best_k" \
-        > "$projection_log" 2>&1
+    for K in $(seq "$K_MIN" "$K_MAX"); do
+        cp "${modern_prefix}.${K}.P" "${all_prefix}.${K}.P.in"
+        projection_log="$ANALYSIS_DIR/with_all_samples_projection_K${K}.log"
+        "$ADMIXTURE" -j"$ADMIXTURE_THREADS" -P "$all_prefix.bed" "$K" \
+            > "$projection_log" 2>&1
 
-    projection_q="${all_prefix}.${best_k}.Q"
-    if [ ! -s "$projection_q" ]; then
-        echo "Error: projection Q file was not generated: $projection_q" >&2
-        return 1
-    fi
+        projection_q="${all_prefix}.${K}.Q"
+        if [ ! -s "$projection_q" ]; then
+            echo "Error: projection Q file was not generated: $projection_q" >&2
+            return 1
+        fi
 
-    ancient_table="$ANALYSIS_DIR/ancient_projection_K${best_k}.tsv"
-    awk -v ancient="$ANCIENT_SAMPLES" -v k="$best_k" '
+        ancient_table="$ANALYSIS_DIR/ancient_projection_K${K}.tsv"
+        awk -v ancient="$ANCIENT_SAMPLES" -v k="$K" '
         BEGIN {
             split(ancient, names, ",")
             for (i in names) ancient_sample[names[i]] = 1
@@ -115,10 +155,9 @@ project_all_samples() {
             for (i = 1; i <= NF; i++) printf "\t%s", $i
             print ""
         }
-    ' "${all_prefix}.fam" "$projection_q" > "$ancient_table"
-
-    echo "Ancient projection: $ancient_table"
-    echo "Fixed modern model: ${modern_prefix}.${best_k}.P"
+        ' "${all_prefix}.fam" "$projection_q" > "$ancient_table"
+        echo "Ancient ADMIXTURE projection K=$K: $ancient_table"
+    done
 }
 
 mkdir -p "$ANALYSIS_DIR"
@@ -126,6 +165,7 @@ prepare_dataset "modern" "$MODERN_VCF"
 run_modern_admixture
 
 prepare_dataset "with_all_samples" "$ALL_VCF"
+run_pca_projection
 project_all_samples
 
 echo "PCA and fixed-model ADMIXTURE analyses complete."

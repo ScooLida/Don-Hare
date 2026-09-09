@@ -68,13 +68,7 @@ for K in $(seq "$K_MIN" "$K_MAX"); do
     cp "$MODERN_ADMIX_PREFIX.$K.Q" "$MODERN_PREFIX.$K.Q"
 done
 
-BEST_K=$(awk 'NR > 1 { print }' "$CV_TABLE" | sort -k2,2n | awk 'NR == 1 { print $1 }')
-if [ -z "$BEST_K" ]; then
-    echo "Error: could not determine the best K." >&2
-    exit 1
-fi
-echo "Best modern K: $BEST_K"
-printf '%s\n' "$BEST_K" > "$ANALYSIS_DIR/modern_optimal_K.txt"
+echo "ADMIXTURE completed for K=${K_MIN}..${K_MAX}; K will be selected manually from the CV plot."
 
 if [ ! -s "$ALL_PREFIX.bed" ] || [ ! -s "$ALL_PREFIX.bim" ] || [ ! -s "$ALL_PREFIX.fam" ]; then
     "$PLINK" --vcf "$ALL_VCF" --make-bed \
@@ -101,31 +95,31 @@ if ! cmp -s "$MODERN_ADMIX_PREFIX.bim" "$ALL_ADMIX_PREFIX.bim"; then
     exit 1
 fi
 
-MODERN_P="$MODERN_ADMIX_PREFIX.${BEST_K}.P"
-if [ ! -s "$MODERN_P" ]; then
-    echo "Error: modern ADMIXTURE P file is missing: $MODERN_P" >&2
-    exit 1
-fi
+for K in $(seq "$K_MIN" "$K_MAX"); do
+    MODERN_P="$MODERN_ADMIX_PREFIX.${K}.P"
+    if [ ! -s "$MODERN_P" ]; then
+        echo "Error: modern ADMIXTURE P file is missing: $MODERN_P" >&2
+        exit 1
+    fi
 
-cp "$MODERN_P" "$ALL_ADMIX_PREFIX.${BEST_K}.P.in"
-printf '%s\n' "$BEST_K" > "$ANALYSIS_DIR/with_all_samples_optimal_K.txt"
-PROJECTION_LOG="$ANALYSIS_DIR/with_all_samples_projection_K${BEST_K}.log"
-PROJECTION_Q="$ALL_ADMIX_PREFIX.${BEST_K}.Q"
-if [ ! -s "$PROJECTION_Q" ]; then
-    (
-        cd "$ANALYSIS_DIR"
-        "$ADMIXTURE" -j"$ADMIXTURE_THREADS" -P "$(basename "$ALL_ADMIX_PREFIX").bed" "$BEST_K" \
-            > "$(basename "$PROJECTION_LOG")" 2>&1
-    )
-fi
-if [ ! -s "$PROJECTION_Q" ]; then
-    echo "Error: projection Q file was not generated: $PROJECTION_Q" >&2
-    exit 1
-fi
-cp "$PROJECTION_Q" "$ALL_PREFIX.${BEST_K}.Q"
+    cp "$MODERN_P" "$ALL_ADMIX_PREFIX.${K}.P.in"
+    PROJECTION_LOG="$ANALYSIS_DIR/with_all_samples_projection_K${K}.log"
+    PROJECTION_Q="$ALL_ADMIX_PREFIX.${K}.Q"
+    if [ ! -s "$PROJECTION_Q" ]; then
+        (
+            cd "$ANALYSIS_DIR"
+            "$ADMIXTURE" -j"$ADMIXTURE_THREADS" -P "$(basename "$ALL_ADMIX_PREFIX").bed" "$K" \
+                > "$(basename "$PROJECTION_LOG")" 2>&1
+        )
+    fi
+    if [ ! -s "$PROJECTION_Q" ]; then
+        echo "Error: projection Q file was not generated: $PROJECTION_Q" >&2
+        exit 1
+    fi
+    cp "$PROJECTION_Q" "$ALL_PREFIX.${K}.Q"
 
-ANCIENT_TABLE="$ANALYSIS_DIR/ancient_projection_K${BEST_K}.tsv"
-awk -v ancient="$ANCIENT_SAMPLES" -v k="$BEST_K" '
+    ANCIENT_TABLE="$ANALYSIS_DIR/ancient_projection_K${K}.tsv"
+    awk -v ancient="$ANCIENT_SAMPLES" -v k="$K" '
     BEGIN {
         split(ancient, names, ",")
         for (i in names) ancient_sample[names[i]] = 1
@@ -144,8 +138,9 @@ awk -v ancient="$ANCIENT_SAMPLES" -v k="$BEST_K" '
         print ""
     }
 ' "$ALL_PREFIX.fam" "$PROJECTION_Q" > "$ANCIENT_TABLE"
+    echo "Ancient projection K=$K: $ANCIENT_TABLE"
+done
 
 echo "Continuation complete."
-echo "Best K: $BEST_K"
 echo "All-sample PCA: $ALL_PREFIX.eigenvec"
-echo "Ancient projection: $ANCIENT_TABLE"
+echo "All K projections: $ANALYSIS_DIR/ancient_projection_K*.tsv"

@@ -1,8 +1,8 @@
 #!/bin/bash
 # Call and filter variants from Paleomix BAM files.
-# Per-sample VCFs are generated once. Modern samples define the filtered variant
-# sites; the all-sample VCF keeps exactly those sites and retains missing ancient
-# genotypes instead of using ancient coverage to remove a site.
+# Per-sample VCFs are generated once for individual-sample use. The population
+# VCF is called jointly from all BAMs so reference genotypes are not converted
+# into missing values when per-sample VCFs are merged.
 
 set -euo pipefail
 
@@ -101,21 +101,29 @@ is_ancient() {
     return 1
 }
 
+declare -a BAMS=()
 : > "$MERGE_LIST"
 : > "$MODERN_MERGE_LIST"
 for sample in "${SAMPLES[@]}"; do
     printf '%s\n' "$VCF_DIR/$sample.vcf.gz" >> "$MERGE_LIST"
+    bam="$BAM_DIR/$sample/$sample.rescaled.bam"
+    BAMS+=("$bam")
     if ! is_ancient "$sample"; then
         printf '%s\n' "$VCF_DIR/$sample.vcf.gz" >> "$MODERN_MERGE_LIST"
     fi
 done
 
 MERGED_VCF="${DATA_PREFIX}_merged_all.vcf.gz"
-bcftools merge -l "$MERGE_LIST" -Oz -o "$MERGED_VCF"
+echo "Calling variants jointly for ${#BAMS[@]} samples"
+bcftools mpileup --threads "$THREADS" -a FORMAT/DP -d 250 -R "$CHROM_LIST" \
+    -f "$REFERENCE" "${BAMS[@]}" |
+    bcftools call --threads "$THREADS" -mv -Oz -o "$MERGED_VCF"
 tabix -p vcf "$MERGED_VCF"
+echo "Joint all-sample sites: $(bcftools index -n "$MERGED_VCF")"
 
 ALL_SAMPLE_FILE="${DATA_PREFIX}_samples_all.txt"
 MODERN_SAMPLE_FILE="${DATA_PREFIX}_samples_modern.txt"
+ANCIENT_SAMPLE_FILE="${DATA_PREFIX}_samples_ancient.txt"
 printf '%s\n' "${SAMPLES[@]}" > "$ALL_SAMPLE_FILE"
 {
     for sample in "${SAMPLES[@]}"; do
@@ -124,6 +132,13 @@ printf '%s\n' "${SAMPLES[@]}" > "$ALL_SAMPLE_FILE"
         fi
     done
 } > "$MODERN_SAMPLE_FILE"
+{
+    for sample in "${SAMPLES[@]}"; do
+        if is_ancient "$sample"; then
+            printf '%s\n' "$sample"
+        fi
+    done
+} > "$ANCIENT_SAMPLE_FILE"
 
 filter_modern_dataset() {
     if [ ! -s "$MODERN_SAMPLE_FILE" ]; then
@@ -132,21 +147,21 @@ filter_modern_dataset() {
     fi
 
     MERGED_MODERN_VCF="${DATA_PREFIX}_merged_modern.vcf.gz"
-    bcftools merge -l "$MODERN_MERGE_LIST" -Oz -o "$MERGED_MODERN_VCF"
+    bcftools view -S "$MODERN_SAMPLE_FILE" -Oz -o "$MERGED_MODERN_VCF" "$MERGED_VCF"
     tabix -p vcf "$MERGED_MODERN_VCF"
 
     bcftools view \
         -e "QUAL < ${QUAL} || MIN(FMT/DP) < ${DEPTH}" \
         -Oz -o "${DATA_PREFIX}_modern.vcf.gz" "$MERGED_MODERN_VCF"
     tabix -p vcf "${DATA_PREFIX}_modern.vcf.gz"
+    echo "Modern selected sites: $(bcftools index -n "${DATA_PREFIX}_modern.vcf.gz")"
     echo "Created: ${DATA_PREFIX}_modern.vcf.gz"
 }
 
 filter_modern_dataset
 
 # Use modern-selected variant positions as the master list for the all-sample
-# dataset. Merge the filtered modern VCF with ancient VCFs at those positions;
-# missing ancient genotypes remain ./., rather than removing the site.
+# dataset. Mask ancient genotypes with DP < 2 without removing the site.
 bcftools query -f '%CHROM\t%POS\t%POS\n' \
     "${DATA_PREFIX}_modern.vcf.gz" > "$SELECTED_SITES"
 if [ ! -s "$SELECTED_SITES" ]; then
@@ -154,17 +169,20 @@ if [ ! -s "$SELECTED_SITES" ]; then
     exit 1
 fi
 
-ALL_MERGE_INPUTS=("${DATA_PREFIX}_modern.vcf.gz")
-for sample in "${SAMPLES[@]}"; do
-    if is_ancient "$sample"; then
-        ALL_MERGE_INPUTS+=("$VCF_DIR/$sample.vcf.gz")
-    fi
-done
-
-bcftools merge -R "$SELECTED_SITES" -Oz \
+ANCIENT_SELECTED_RAW="${DATA_PREFIX}_ancient_selected_raw.vcf.gz"
+ANCIENT_SELECTED_MASKED="${DATA_PREFIX}_ancient_selected_masked.vcf.gz"
+bcftools view -S "$ANCIENT_SAMPLE_FILE" -R "$SELECTED_SITES" -Oz \
+    -o "$ANCIENT_SELECTED_RAW" "$MERGED_VCF"
+tabix -p vcf "$ANCIENT_SELECTED_RAW"
+bcftools +setGT "$ANCIENT_SELECTED_RAW" -Oz \
+    -o "$ANCIENT_SELECTED_MASKED" -- \
+    -t q -n . -i 'FMT/DP<2'
+tabix -p vcf "$ANCIENT_SELECTED_MASKED"
+bcftools merge -Oz \
     -o "${DATA_PREFIX}_with_all_samples.vcf.gz" \
-    "${ALL_MERGE_INPUTS[@]}"
+    "${DATA_PREFIX}_modern.vcf.gz" "$ANCIENT_SELECTED_MASKED"
 tabix -p vcf "${DATA_PREFIX}_with_all_samples.vcf.gz"
+echo "All-sample selected sites: $(bcftools index -n "${DATA_PREFIX}_with_all_samples.vcf.gz")"
 echo "Created: ${DATA_PREFIX}_with_all_samples.vcf.gz"
 
 echo "Variant calling and filtering complete."

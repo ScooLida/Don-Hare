@@ -16,22 +16,30 @@ Run the scripts in this order:
 
 ### `scr_11_bam_to_vcf.sh`
 
-Calls variants from Paleomix BAM files, restricts variant calling to regions
-listed in `chr.txt`, and merges per-sample VCF files. Modern samples then define
-the filtered variant positions. The all-sample VCF is restricted to exactly the
-same positions, while ancient samples with no call remain missing (`./.`).
+Calls variants jointly from Paleomix BAM files, restricts variant calling to
+regions listed in `chr.txt`, and keeps per-sample VCFs for individual use.
+Modern samples then define the filtered variant positions. The all-sample VCF
+is restricted to exactly the same positions, while ancient samples with no call
+remain missing (`./.`).
 
-Filters: `QUAL >= 20` and `MIN(FMT/DP) >= 3`.
+Filters: `QUAL >= 20` and `MIN(FMT/DP) >= 3`, meaning every modern sample must
+have at least three reads at the site. PLINK additionally applies `--geno 0.2`
+to modern samples. No LD-pruning filter is applied. The joint call is built
+from all sample BAMs so non-variant reference genotypes are not converted to
+missing values by merging per-sample VCFs.
+
+After site selection, ancient genotypes with `DP < 2` are set to `./.` while
+the site itself is retained for modern samples and other ancient samples.
 
 ### `scr_12_pca_admixture.sh`
 
-Runs PCA for modern and all-sample datasets using the modern-selected
-positions. PLINK applies `--geno 0.2` only to modern samples. ADMIXTURE tests
-`K=2..15` on modern samples, selects the lowest cross-validation error, and
-then uses projection mode (`-P`) for all samples. The modern `.P` matrix is
-fixed, so ancient samples receive ancestry proportions without re-estimating
-the modern model. Ancient-only results are saved to
-`population_analysis/ancient_projection_K<K>.tsv`.
+Runs PCA on modern samples using the modern-selected positions, then projects
+all samples onto the modern PCA axes with PLINK 2 allele weights. PLINK applies
+`--geno 0.2` only to modern samples. ADMIXTURE tests `K=2..15` on modern
+samples and projects all samples for every K using the fixed modern `.P`
+matrix; K is selected manually from the CV plot. Ancient-only results are
+saved to `population_analysis/ancient_projection_K<K>.tsv` and
+`population_analysis/ancient_pca_projection.tsv`.
 
 ### `scr_13_population_plots.R`
 

@@ -6,12 +6,14 @@ set -euo pipefail
 ANALYSIS_DIR="./population_analysis"
 MODERN_PREFIX="$ANALYSIS_DIR/modern"
 MODERN_ADMIX_PREFIX="$ANALYSIS_DIR/modern_admix"
+MODERN_VCF="${MODERN_VCF:-MyHare_modern.vcf.gz}"
 CHROM_MAP="$ANALYSIS_DIR/admix_chromosomes.tsv"
 UPDATE_CHR="$ANALYSIS_DIR/admix_update_chr.tsv"
 PLINK="$HOME/plink"
 ADMIXTURE="$HOME/admixture/dist/admixture_linux-1.3.0/admixture"
 PLINK_THREADS=8
 ADMIXTURE_THREADS=4
+MISSINGNESS=0.2
 PCA_COMPONENTS=4
 K_MIN=2
 K_MAX=15
@@ -23,12 +25,24 @@ exec > >(tee "$LOG_FILE") 2>&1
 echo "Modern-only analysis started: $(date)"
 echo "Main log: $LOG_FILE"
 
+REBUILD_MODERN="${REBUILD_MODERN:-0}"
+if [ "$REBUILD_MODERN" = "1" ]; then
+    if [ ! -s "$MODERN_VCF" ]; then
+        echo "Error: modern VCF is missing: $MODERN_VCF" >&2
+        exit 1
+    fi
+    echo "Rebuilding modern PLINK files from $MODERN_VCF"
+    "$PLINK" --vcf "$MODERN_VCF" --geno "$MISSINGNESS" --make-bed \
+        --set-missing-var-ids '@:#_$1_$2' --threads "$PLINK_THREADS" \
+        --allow-extra-chr --out "$MODERN_PREFIX"
+fi
+
 if [ ! -s "$MODERN_PREFIX.bed" ] || [ ! -s "$MODERN_PREFIX.bim" ] || [ ! -s "$MODERN_PREFIX.fam" ]; then
     echo "Error: modern PLINK files are missing: $MODERN_PREFIX.*" >&2
     exit 1
 fi
 
-if [ ! -s "$MODERN_PREFIX.eigenvec" ] || [ ! -s "$MODERN_PREFIX.eigenval" ]; then
+if [ "$REBUILD_MODERN" = "1" ] || [ ! -s "$MODERN_PREFIX.eigenvec" ] || [ ! -s "$MODERN_PREFIX.eigenval" ]; then
     echo "Modern PCA files are missing; running PCA."
     "$PLINK" --bfile "$MODERN_PREFIX" --pca "$PCA_COMPONENTS" \
         --threads "$PLINK_THREADS" --allow-extra-chr --out "$MODERN_PREFIX"
@@ -38,15 +52,15 @@ fi
 
 # ADMIXTURE requires numeric chromosome codes. Keep the original PLINK files
 # unchanged and create a separate numeric-chromosome copy for ADMIXTURE.
-if [ ! -s "$CHROM_MAP" ]; then
+if [ "$REBUILD_MODERN" = "1" ] || [ ! -s "$CHROM_MAP" ]; then
     awk '!seen[$1]++ { print $1, ++n }' "$MODERN_PREFIX.bim" > "$CHROM_MAP"
 fi
-if [ ! -s "$UPDATE_CHR" ]; then
+if [ "$REBUILD_MODERN" = "1" ] || [ ! -s "$UPDATE_CHR" ]; then
     awk 'NR == FNR { new[$1] = $2; next } ($1 in new) { print $2, new[$1] }' \
         "$CHROM_MAP" "$MODERN_PREFIX.bim" > "$UPDATE_CHR"
 fi
 
-if [ ! -s "$MODERN_ADMIX_PREFIX.bed" ] || [ ! -s "$MODERN_ADMIX_PREFIX.bim" ] || [ ! -s "$MODERN_ADMIX_PREFIX.fam" ]; then
+if [ "$REBUILD_MODERN" = "1" ] || [ ! -s "$MODERN_ADMIX_PREFIX.bed" ] || [ ! -s "$MODERN_ADMIX_PREFIX.bim" ] || [ ! -s "$MODERN_ADMIX_PREFIX.fam" ]; then
     echo "Creating numeric-chromosome PLINK files for ADMIXTURE."
     "$PLINK" --bfile "$MODERN_PREFIX" --update-chr "$UPDATE_CHR" --make-bed \
         --allow-extra-chr --out "$MODERN_ADMIX_PREFIX"
@@ -80,18 +94,11 @@ for K in $(seq "$K_MIN" "$K_MAX"); do
     cp "$log_file" "$ANALYSIS_DIR/modern_admixture_K${K}.log"
 done
 
-BEST_K=$(awk 'NR > 1 { print }' "$CV_TABLE" | sort -k2,2n | awk 'NR == 1 { print $1 }')
-if [ -z "$BEST_K" ]; then
-    echo "Error: could not determine the best K." >&2
-    exit 1
-fi
-printf '%s\n' "$BEST_K" > "$ANALYSIS_DIR/modern_optimal_K.txt"
-echo "Best modern K: $BEST_K"
+echo "ADMIXTURE completed for K=${K_MIN}..${K_MAX}; K will be selected manually from the CV plot."
 
-Rscript --vanilla - "$ANALYSIS_DIR" "$BEST_K" <<'RSCRIPT'
+Rscript --vanilla - "$ANALYSIS_DIR" <<'RSCRIPT'
 args <- commandArgs(trailingOnly = TRUE)
 analysis_dir <- args[[1]]
-best_k <- as.integer(args[[2]])
 plot_dir <- file.path(analysis_dir, "plots")
 dir.create(plot_dir, recursive = TRUE, showWarnings = FALSE)
 
@@ -115,41 +122,9 @@ ggplot2::ggsave(
   dpi = 300
 )
 
-q_file <- file.path(analysis_dir, paste0("modern.", best_k, ".Q"))
-q <- read.table(q_file, header = FALSE)
-fam <- read.table(fam_file, header = FALSE, stringsAsFactors = FALSE)
-if (nrow(q) != nrow(fam)) stop("Q and FAM row counts differ.")
-names(q) <- paste0("Cluster_", seq_len(ncol(q)))
-q$Sample <- fam$V2
-
-q_long <- reshape(
-  q,
-  varying = names(q)[seq_len(ncol(q) - 1)],
-  v.names = "Ancestry",
-  timevar = "Cluster",
-  times = names(q)[seq_len(ncol(q) - 1)],
-  idvar = "Sample",
-  direction = "long"
-)
-q_long$Sample <- factor(q_long$Sample, levels = q$Sample)
-
-ggplot2::ggsave(
-  file.path(plot_dir, paste0("modern_ADMIXTURE_K", best_k, ".png")),
-  ggplot2::ggplot(q_long, ggplot2::aes(Sample, Ancestry, fill = Cluster)) +
-    ggplot2::geom_col(width = 1) +
-    ggplot2::labs(title = paste("ADMIXTURE: modern (K =", best_k, ")"),
-                  x = "Sample", y = "Ancestry proportion") +
-    ggplot2::theme_bw() +
-    ggplot2::theme(axis.text.x = ggplot2::element_blank(),
-                   axis.ticks.x = ggplot2::element_blank()),
-  width = 14,
-  height = 6,
-  dpi = 300
-)
-
-message("Modern plots saved to: ", plot_dir)
+message("Modern PCA plot saved to: ", plot_dir)
 RSCRIPT
 
 echo "Modern-only analysis complete: $(date)"
 echo "PCA plot: $ANALYSIS_DIR/plots/modern_PCA.png"
-echo "ADMIXTURE plot: $ANALYSIS_DIR/plots/modern_ADMIXTURE_K${BEST_K}.png"
+echo "ADMIXTURE results: $ANALYSIS_DIR/modern_admix_K{${K_MIN}..${K_MAX}}.Q"
