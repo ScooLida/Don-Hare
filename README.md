@@ -54,6 +54,19 @@ population/species assignments and outgroup; samples marked `xxx` are ignored
 by Dsuite. Results are written to `dsuite_results/sets_hare_*` and
 `dsuite_results/sets_krol_*`.
 
+### `scr_15_fbranch_new_trees.sh`
+
+Uses the grouped ASTRAL tree
+`astral_species_tree_with_all_samples_grouped_modern_ancient_separate.tre` as
+the topology source. The tree leaves are population/species labels, not
+individual sample IDs. Dsuite gets the sample-to-population assignments from
+the second column of `sets_hare.txt` or `sets_krol.txt`, so a sample does not
+need to occur as an individual leaf: it is included when its assigned
+population/species leaf is present in the tree. Samples assigned `xxx` are
+ignored. The script verifies that every non-`xxx` population label required by
+the set file is present in the grouped tree before running `Dtrios` and
+`Fbranch`.
+
 ## Line 2: BUSCO Gene Analysis and Trees
 
 Run the scripts in this order:
