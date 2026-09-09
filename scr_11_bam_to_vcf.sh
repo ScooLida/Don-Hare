@@ -1,8 +1,7 @@
 #!/bin/bash
 # Call and filter variants from Paleomix BAM files.
-# Per-sample VCFs are generated once for individual-sample use. The population
-# VCF is called jointly from all BAMs so reference genotypes are not converted
-# into missing values when per-sample VCFs are merged.
+# The population VCF is called jointly from all BAMs so reference genotypes are
+# retained for the modern-first site selection and ancient masking steps.
 
 set -euo pipefail
 
