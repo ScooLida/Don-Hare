@@ -16,11 +16,10 @@ Run the scripts in this order:
 
 ### `scr_11_bam_to_vcf.sh`
 
-Calls variants jointly from Paleomix BAM files, restricts variant calling to
-regions listed in `chr.txt`, and keeps per-sample VCFs for individual use.
-Modern samples then define the filtered variant positions. The all-sample VCF
-is restricted to exactly the same positions, while ancient samples with no call
-remain missing (`./.`).
+Calls variants jointly from Paleomix BAM files and restricts variant calling to
+regions listed in `chr.txt`. Modern samples then define the filtered variant
+positions. The all-sample VCF is restricted to exactly the same positions,
+while ancient samples with no call remain missing (`./.`).
 
 Filters: `QUAL >= 20` and `MIN(FMT/DP) >= 3`, meaning every modern sample must
 have at least three reads at the site. PLINK additionally applies `--geno 0.2`
