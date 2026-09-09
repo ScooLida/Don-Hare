@@ -19,6 +19,10 @@ PCA_COMPONENTS=4
 K_MIN=2
 K_MAX=15
 ANCIENT_SAMPLES="1k,3k,4k,5kS8"
+MODERN_ADMIX_PREFIX="$ANALYSIS_DIR/modern_admix"
+ALL_ADMIX_PREFIX="$ANALYSIS_DIR/with_all_samples_admix"
+CHROM_MAP="$ANALYSIS_DIR/admix_chromosomes.tsv"
+UPDATE_CHR="$ANALYSIS_DIR/admix_update_chr.tsv"
 
 prepare_dataset() {
     local label=$1
@@ -47,19 +51,36 @@ prepare_dataset() {
     echo "${label} PLINK variants after conversion: $(wc -l < "${prefix}.bim")"
 }
 
+prepare_admixture_dataset() {
+    local source_prefix=$1
+    local output_prefix=$2
+
+    "$PLINK" --bfile "$source_prefix" --update-chr "$UPDATE_CHR" --make-bed \
+        --allow-extra-chr --out "$output_prefix"
+}
+
 run_modern_admixture() {
-    local prefix="$ANALYSIS_DIR/modern"
+    local prefix="$MODERN_ADMIX_PREFIX"
+    local modern_prefix="$ANALYSIS_DIR/modern"
     local cv_table="$ANALYSIS_DIR/modern_admixture_cv.tsv"
 
     printf "K\tCV_error\n" > "$cv_table"
     for K in $(seq "$K_MIN" "$K_MAX"); do
         log_file="$ANALYSIS_DIR/modern_admixture_K${K}.log"
-        "$ADMIXTURE" -j"$ADMIXTURE_THREADS" --cv "$prefix.bed" "$K" \
-            > "$log_file" 2>&1
+        (
+            cd "$ANALYSIS_DIR"
+            "$ADMIXTURE" -j"$ADMIXTURE_THREADS" --cv "$(basename "$prefix").bed" "$K" \
+                > "$(basename "$log_file")" 2>&1
+        )
         cv_error=$(awk '/CV error/ { value=$NF } END { print value }' "$log_file")
         if [ -n "$cv_error" ]; then
             printf "%s\t%s\n" "$K" "$cv_error" >> "$cv_table"
         fi
+    done
+
+    for K in $(seq "$K_MIN" "$K_MAX"); do
+        cp "$prefix.$K.P" "$modern_prefix.$K.P"
+        cp "$prefix.$K.Q" "$modern_prefix.$K.Q"
     done
 
     echo "ADMIXTURE completed for K=${K_MIN}..${K_MAX}; K will be selected manually from the CV plot."
@@ -115,22 +136,24 @@ PY
 }
 
 project_all_samples() {
-    local modern_prefix="$ANALYSIS_DIR/modern"
     local all_prefix="$ANALYSIS_DIR/with_all_samples"
 
     # Projection requires identical SNP IDs and order in both datasets.
-    if ! cmp -s "${modern_prefix}.bim" "${all_prefix}.bim"; then
+    if ! cmp -s "${MODERN_ADMIX_PREFIX}.bim" "${ALL_ADMIX_PREFIX}.bim"; then
         echo "Error: modern and all-sample PLINK SNP sets differ." >&2
         return 1
     fi
 
     for K in $(seq "$K_MIN" "$K_MAX"); do
-        cp "${modern_prefix}.${K}.P" "${all_prefix}.${K}.P.in"
+        cp "${MODERN_ADMIX_PREFIX}.${K}.P" "${ALL_ADMIX_PREFIX}.${K}.P.in"
         projection_log="$ANALYSIS_DIR/with_all_samples_projection_K${K}.log"
-        "$ADMIXTURE" -j"$ADMIXTURE_THREADS" -P "$all_prefix.bed" "$K" \
-            > "$projection_log" 2>&1
+        (
+            cd "$ANALYSIS_DIR"
+            "$ADMIXTURE" -j"$ADMIXTURE_THREADS" -P "$(basename "$ALL_ADMIX_PREFIX").bed" "$K" \
+                > "$(basename "$projection_log")" 2>&1
+        )
 
-        projection_q="${all_prefix}.${K}.Q"
+        projection_q="${ALL_ADMIX_PREFIX}.${K}.Q"
         if [ ! -s "$projection_q" ]; then
             echo "Error: projection Q file was not generated: $projection_q" >&2
             return 1
@@ -157,14 +180,20 @@ project_all_samples() {
         }
         ' "${all_prefix}.fam" "$projection_q" > "$ancient_table"
         echo "Ancient ADMIXTURE projection K=$K: $ancient_table"
+        cp "$projection_q" "${all_prefix}.${K}.Q"
     done
 }
 
 mkdir -p "$ANALYSIS_DIR"
 prepare_dataset "modern" "$MODERN_VCF"
+awk '!seen[$1]++ { print $1, ++n }' "$ANALYSIS_DIR/modern.bim" > "$CHROM_MAP"
+awk 'NR == FNR { new[$1] = $2; next } ($1 in new) { print $2, new[$1] }' \
+    "$CHROM_MAP" "$ANALYSIS_DIR/modern.bim" > "$UPDATE_CHR"
+prepare_admixture_dataset "$ANALYSIS_DIR/modern" "$MODERN_ADMIX_PREFIX"
 run_modern_admixture
 
 prepare_dataset "with_all_samples" "$ALL_VCF"
+prepare_admixture_dataset "$ANALYSIS_DIR/with_all_samples" "$ALL_ADMIX_PREFIX"
 run_pca_projection
 project_all_samples
 

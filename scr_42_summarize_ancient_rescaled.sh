@@ -6,7 +6,7 @@ BAM_ROOT="${BAM_ROOT:-$HOME/hare_work/My_new_krol/my_genome}"
 OUTPUT="${OUTPUT:-$HOME/hare_work/ancient_rescaled_summary.tsv}"
 SAMPLES=(1k 3k 4k 5kS8)
 
-printf '%s\n' "sample\tbam\ttotal_reads\tprimary_reads\tmapped_reads\tmapped_percent\tduplicates\tproperly_paired\treference_bases\tcovered_bases\tbreadth_percent\tmean_depth\tmean_baseq\tmean_mapq" > "$OUTPUT"
+printf 'sample\tbam\ttotal_reads\tprimary_reads\tmapped_reads\tmapped_percent\tduplicates\tproperly_paired\treference_bases\tcovered_bases\tbreadth_percent\tmean_depth\tmean_baseq\tmean_mapq\n' > "$OUTPUT"
 
 for sample in "${SAMPLES[@]}"; do
     bam="$BAM_ROOT/$sample/$sample.rescaled.bam"
@@ -23,7 +23,7 @@ for sample in "${SAMPLES[@]}"; do
     total_reads=$(awk '/^[0-9]+ \+ [0-9]+ in total/ {print $1; exit}' <<< "$flagstat")
     primary_reads=$(awk '/^[0-9]+ \+ [0-9]+ primary$/ {print $1; exit}' <<< "$flagstat")
     mapped_reads=$(awk '/^[0-9]+ \+ [0-9]+ mapped \(/ {print $1; exit}' <<< "$flagstat")
-    mapped_percent=$(awk '/^[0-9]+ \+ [0-9]+ mapped \(/ {value=$5; gsub("%", "", value); print value; exit}' <<< "$flagstat")
+    mapped_percent=$(awk '/^[0-9]+ \+ [0-9]+ mapped \(/ {value=$5; gsub(/[()%]/, "", value); print value; exit}' <<< "$flagstat")
     duplicates=$(awk '/^[0-9]+ \+ [0-9]+ duplicates$/ {print $1; exit}' <<< "$flagstat")
     properly_paired=$(awk '/^[0-9]+ \+ [0-9]+ properly paired/ {print $1; exit}' <<< "$flagstat")
 

@@ -15,6 +15,11 @@ DATASET_MODERN="modern"
 DATASET_WITH_ALL="with_all_samples"
 SCRIPT_PATH="$(readlink -f "$0")"
 
+if ! [[ "$THREADS" =~ ^[1-9][0-9]*$ ]]; then
+    echo "Error: parallel_jobs must be a positive integer: $THREADS" >&2
+    exit 1
+fi
+
 build_gene_tree() {
     local dataset=$1
     local gene=$2
@@ -101,6 +106,7 @@ build_dataset_trees() {
         echo "Error: ASTRAL jar not found: $ASTRAL_JAR" >&2
         return 1
     fi
+    mkdir -p "${TMPDIR:-$HOME/tmp}"
 
     java -Xshare:off -Djava.io.tmpdir="${TMPDIR:-$HOME/tmp}" \
         -jar "$ASTRAL_JAR" -i "$all_trees" -o "$astral_output" \

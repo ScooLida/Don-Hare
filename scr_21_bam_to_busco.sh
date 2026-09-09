@@ -7,15 +7,18 @@ set -euo pipefail
 # Configuration
 # Put one sample ID per line in SAMPLES. Empty lines and lines starting with
 # '#' are ignored.
-SAMPLES="samples.txt"
+SAMPLES="${SAMPLES:-samples.txt}"
+if [ ! -f "$SAMPLES" ] && [ -f "sample_list.txt" ]; then
+    SAMPLES="sample_list.txt"
+fi
 # Previous inline list:
 # SAMPLES="SRR14535670,SRR32541919"
 ANCIENT_SAMPLES="1k,3k,4k,5kS8"
 DATASET_MODERN="modern"
 DATASET_WITH_ALL="with_all_samples"
-REF_GENOME="$HOME/hare_work/krol_g.fasta"
-BED_FILE="$HOME/hare_work/krol_genes_fixed.bed"
-BAM_DIR="$HOME/hare_work/MyKrol2/my_genome"
+REF_GENOME="${REF_GENOME:-$HOME/hare_work/krol_g.fasta}"
+BED_FILE="${BED_FILE:-$HOME/hare_work/krol_genes_fixed.bed}"
+BAM_DIR="${BAM_DIR:-$HOME/hare_work/My_new_krol/my_genome}"
 OLD_GENES_DIR="./subset_parallel/genes_by_locus"
 
 MIN_COVERAGE=2
@@ -83,6 +86,9 @@ for sample in "${SAMPLE_ARRAY[@]}"; do
     if [ ! -f "$bam" ]; then
         echo "Error: BAM file not found: $bam"
         exit 1
+    fi
+    if [ ! -f "$bam.bai" ] && [ ! -f "${bam%.bam}.bai" ] && [ ! -f "$bam.csi" ]; then
+        samtools index "$bam"
     fi
     mkdir -p "$EXTRACTED_DIR/$sample"
 

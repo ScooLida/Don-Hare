@@ -45,6 +45,9 @@ for sample in "${SAMPLES[@]}"; do
         echo "Error: BAM file not found for $sample: $bam"
         exit 1
     fi
+    if [ ! -f "$bam.bai" ] && [ ! -f "${bam%.bam}.bai" ] && [ ! -f "$bam.csi" ]; then
+        samtools index -@ "$THREADS" "$bam"
+    fi
 done
 
 is_ancient() {

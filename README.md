@@ -36,8 +36,9 @@ Runs PCA on modern samples using the modern-selected positions, then projects
 all samples onto the modern PCA axes with PLINK 2 allele weights. PLINK applies
 `--geno 0.2` only to modern samples. ADMIXTURE tests `K=2..15` on modern
 samples and projects all samples for every K using the fixed modern `.P`
-matrix; K is selected manually from the CV plot. Ancient-only results are
-saved to `population_analysis/ancient_projection_K<K>.tsv` and
+matrix after converting chromosome names to numeric codes; K is selected
+manually from the CV plot. Ancient-only results are saved to
+`population_analysis/ancient_projection_K<K>.tsv` and
 `population_analysis/ancient_pca_projection.tsv`.
 
 ### `scr_13_population_plots.R`
@@ -65,6 +66,11 @@ population/species leaf is present in the tree. Samples assigned `xxx` are
 ignored. The script verifies that every non-`xxx` population label required by
 the set file is present in the grouped tree before running `Dtrios` and
 `Fbranch`.
+
+This script is not run directly after `scr_24_iqtree_astral.sh`: `scr_24`
+produces the ungrouped all-sample tree
+`astral_species_tree_with_all_samples.tre`. A grouped tree must be supplied to
+`scr_15` through `TREE_SOURCE` before the Fbranch run.
 
 ## Line 2: BUSCO Gene Analysis and Trees
 
@@ -100,7 +106,7 @@ Filters aligned BUSCO genes using the modern alignments only and writes the
 modern-selected locus list. The same list is copied for the all-sample dataset;
 absence of an ancient sequence does not remove the locus.
 
-Filters: maximum sequence length `5000`, minimum ATGC count per modern sample
+Filters: maximum sequence length `10000`, minimum ATGC count per modern sample
 `30`, and maximum non-ATGC proportion `30%`.
 
 ### `scr_24_iqtree_astral.sh`
@@ -110,6 +116,16 @@ ASTRAL to produce the modern backbone species tree. It then builds a second set
 of gene trees and an all-sample species tree using the same modern-selected
 loci after ancient sequences have been added. The second tree is a combined
 inference and may change the topology; it is not formal fixed-tree placement.
+
+`scr_97_dop.sh` is an optional continuation for the ADMIXTURE projection only;
+it is not required after the complete `scr_12` run. `scr_98_modern_only.sh` is
+an independent modern-only alternative and should not be run as a second
+population pipeline unless its outputs are intentionally being rebuilt.
+
+The population scripts are run from the directory containing `sample_list.txt`,
+`chr.txt`, and the `MyHare_*.vcf.gz` files. The BUSCO scripts use the same BAM
+root by default and accept `SAMPLES`, `REF_GENOME`, `BED_FILE`, and `BAM_DIR`
+overrides.
 
 ## Line 3: Mitochondrial PCG Analysis
 
@@ -139,11 +155,12 @@ Paths can be overridden through `REF`, `BAM_ROOT`, `SAMPLE_LIST`, `OUT`, and
 
 ## Other Files
 
-### `scr_98_sex.sh`
+### `scr_41_sex.sh`
 
 An independent sex-analysis script based on X-chromosome and autosomal
-coverage. BAM filtering and indexing commands are currently commented out and
-must be enabled or revised before use.
+coverage. It filters and indexes BAMs in `sex_filtered_bams/` before computing
+the X/autosome depth ratio. By default it processes `1k,4k,3k`; set
+`SAMPLES=...` or provide a one-column `SAMPLE_LIST` to change the sample set.
 
 ### `scr_99_old_ngs_analysis`
 

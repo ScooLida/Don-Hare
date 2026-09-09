@@ -6,7 +6,8 @@ WORK_DIR="${WORK_DIR:-$HOME/hare_work}"
 TREE_SOURCE="${TREE_SOURCE:-$WORK_DIR/subset_parallel/pipeline_bulletproof_final/astral_species_tree_with_all_samples_grouped_modern_ancient_separate.tre}"
 VCF="${VCF:-$WORK_DIR/MyHare_with_all_samples.vcf.gz}"
 DSUITE="${DSUITE:-$HOME/Dsuite/Build/Dsuite}"
-SETS_DIR="${SETS_DIR:-$WORK_DIR/for_data}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SETS_DIR="${SETS_DIR:-$SCRIPT_DIR/for_data}"
 OUT_DIR="${OUT_DIR:-$WORK_DIR/dsuite_results/fbranch_new}"
 
 AMERICANUS_TREE="$OUT_DIR/astral_new_americanus_outgroup.tre"
@@ -173,6 +174,7 @@ if missing:
     raise ValueError("Tree is missing required tips: " + ", ".join(missing))
 
 tree = prune(tree, keep)
+tree = reroot_at_outgroup(tree, source_outgroup_tip)
 for leaf in leaves(tree):
     if leaf.name == source_outgroup_tip:
         leaf.name = "Outgroup"

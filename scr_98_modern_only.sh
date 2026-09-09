@@ -127,4 +127,4 @@ RSCRIPT
 
 echo "Modern-only analysis complete: $(date)"
 echo "PCA plot: $ANALYSIS_DIR/plots/modern_PCA.png"
-echo "ADMIXTURE results: $ANALYSIS_DIR/modern_admix_K{${K_MIN}..${K_MAX}}.Q"
+echo "ADMIXTURE results: $ANALYSIS_DIR/modern.${K_MIN}..${K_MAX}.Q"

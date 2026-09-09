@@ -6,6 +6,7 @@
 ANALYSIS_DIR <- "./population_analysis"
 PLOT_DIR <- file.path(ANALYSIS_DIR, "plots")
 DATASETS <- c("modern", "with_all_samples")
+K_VALUES <- 2:15
 
 if (!requireNamespace("ggplot2", quietly = TRUE)) {
   stop("The ggplot2 package is required. Install it with install.packages('ggplot2').")
@@ -13,29 +14,35 @@ if (!requireNamespace("ggplot2", quietly = TRUE)) {
 
 dir.create(PLOT_DIR, recursive = TRUE, showWarnings = FALSE)
 
-for (dataset in DATASETS) {
-  prefix <- file.path(ANALYSIS_DIR, dataset)
-  eigenvec_file <- paste0(prefix, ".eigenvec")
-  optimal_k_file <- paste0(prefix, "_optimal_K.txt")
-
-  if (!file.exists(eigenvec_file)) {
-    stop("PCA file not found: ", eigenvec_file)
+read_pca <- function(dataset) {
+  if (dataset == "modern") {
+    filename <- file.path(ANALYSIS_DIR, "modern_pca.eigenvec")
+    if (!file.exists(filename)) stop("PCA file not found: ", filename)
+    pca <- read.table(filename, header = TRUE, stringsAsFactors = FALSE,
+                      check.names = FALSE, comment.char = "")
+    names(pca)[names(pca) %in% c("#FID", "FID")] <- "Family"
+    names(pca)[names(pca) == "IID"] <- "Sample"
+  } else {
+    filename <- file.path(ANALYSIS_DIR, "with_all_samples_pca_projection.sscore")
+    if (!file.exists(filename)) stop("PCA projection file not found: ", filename)
+    pca <- read.table(filename, header = TRUE, stringsAsFactors = FALSE,
+                      check.names = FALSE, comment.char = "")
+    names(pca)[names(pca) %in% c("#FID", "FID")] <- "Family"
+    names(pca)[names(pca) == "IID"] <- "Sample"
+    names(pca) <- sub("_AVG$", "", names(pca))
   }
-  if (!file.exists(optimal_k_file)) {
-    stop("Optimal K file not found: ", optimal_k_file)
+
+  if (!all(c("Sample", "PC1", "PC2") %in% names(pca))) {
+    stop("Unexpected PCA format: ", filename)
   }
+  pca
+}
 
-  pca <- read.table(eigenvec_file, header = FALSE, stringsAsFactors = FALSE)
-  if (ncol(pca) < 4) stop("Unexpected PCA file format: ", eigenvec_file)
-  names(pca)[1:4] <- c("Family", "Sample", "PC1", "PC2")
-
+plot_pca <- function(dataset) {
+  pca <- read_pca(dataset)
   pca_plot <- ggplot2::ggplot(pca, ggplot2::aes(x = PC1, y = PC2)) +
     ggplot2::geom_point(size = 2, color = "steelblue") +
-    ggplot2::labs(
-      title = paste("PCA:", dataset),
-      x = "PC1",
-      y = "PC2"
-    ) +
+    ggplot2::labs(title = paste("PCA:", dataset), x = "PC1", y = "PC2") +
     ggplot2::theme_bw()
 
   ggplot2::ggsave(
@@ -45,17 +52,20 @@ for (dataset in DATASETS) {
     height = 6,
     dpi = 300
   )
+}
 
-  best_k <- as.integer(readLines(optimal_k_file, n = 1))
-  q_file <- paste0(prefix, ".", best_k, ".Q")
+plot_admixture <- function(dataset, k) {
+  prefix <- file.path(ANALYSIS_DIR, dataset)
+  q_file <- paste0(prefix, ".", k, ".Q")
   fam_file <- paste0(prefix, ".fam")
   if (!file.exists(q_file) || !file.exists(fam_file)) {
-    stop("ADMIXTURE output not found for ", dataset, " at K=", best_k)
+    stop("ADMIXTURE output not found for ", dataset, " at K=", k)
   }
 
   q <- read.table(q_file, header = FALSE)
   fam <- read.table(fam_file, header = FALSE, stringsAsFactors = FALSE)
-  if (nrow(q) != nrow(fam)) stop("Q and FAM row counts differ for ", dataset)
+  if (nrow(q) != nrow(fam)) stop("Q and FAM row counts differ for ", dataset,
+                                  " at K=", k)
   names(q) <- paste0("Cluster_", seq_len(ncol(q)))
   q$Sample <- fam$V2
 
@@ -76,7 +86,7 @@ for (dataset in DATASETS) {
   ) +
     ggplot2::geom_col(width = 1) +
     ggplot2::labs(
-      title = paste("ADMIXTURE:", dataset, "(K =", best_k, ")"),
+      title = paste("ADMIXTURE:", dataset, "(K =", k, ")"),
       x = "Sample",
       y = "Ancestry proportion"
     ) +
@@ -87,12 +97,17 @@ for (dataset in DATASETS) {
     )
 
   ggplot2::ggsave(
-    file.path(PLOT_DIR, paste0(dataset, "_ADMIXTURE_K", best_k, ".png")),
+    file.path(PLOT_DIR, paste0(dataset, "_ADMIXTURE_K", k, ".png")),
     admixture_plot,
     width = 14,
     height = 6,
     dpi = 300
   )
+}
+
+for (dataset in DATASETS) {
+  plot_pca(dataset)
+  for (k in K_VALUES) plot_admixture(dataset, k)
 }
 
 message("PCA and ADMIXTURE plots saved to: ", PLOT_DIR)
