@@ -30,6 +30,16 @@ missing values by merging per-sample VCFs.
 After site selection, ancient genotypes with `DP < 2` are set to `./.` while
 the site itself is retained for modern samples and other ancient samples.
 
+### `scr_11_bam_to_vcf_test.sh`
+
+Test alternative for the VCF stage. It calls each BAM independently in
+parallel, builds a union of candidate variant positions, and re-genotypes every
+sample at those positions before merging. This preserves real `0/0` calls while
+leaving genuinely unsupported genotypes as `./.`. All outputs use the `_t`
+suffix, for example `MyHare_t_modern.vcf.gz` and
+`MyHare_t_with_all_samples.vcf.gz`. Use `PARALLEL_JOBS=16` to run up to 16
+sample jobs concurrently.
+
 ### `scr_12_pca_admixture.sh`
 
 Runs PCA on modern samples using the modern-selected positions, then projects
