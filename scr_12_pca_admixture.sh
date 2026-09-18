@@ -5,10 +5,12 @@
 set -euo pipefail
 
 # Configuration
-DATA_PREFIX="MyHare"
+DATA_PREFIX="${DATA_PREFIX:-MyHare_t}"
 MODERN_VCF="${DATA_PREFIX}_modern.vcf.gz"
 ALL_VCF="${DATA_PREFIX}_with_all_samples.vcf.gz"
-ANALYSIS_DIR="./population_analysis"
+ANALYSIS_DIR="${ANALYSIS_DIR:-./population_analysis_t}"
+MODERN_LABEL="${MODERN_LABEL:-modern_t}"
+ALL_LABEL="${ALL_LABEL:-with_all_samples_t}"
 PLINK="$HOME/plink"
 PLINK2="${PLINK2:-$HOME/plink2}"
 ADMIXTURE="$HOME/admixture/dist/admixture_linux-1.3.0/admixture"
@@ -19,10 +21,10 @@ PCA_COMPONENTS=4
 K_MIN=2
 K_MAX=15
 ANCIENT_SAMPLES="1k,3k,4k,5kS8"
-MODERN_ADMIX_PREFIX="$ANALYSIS_DIR/modern_admix"
-ALL_ADMIX_PREFIX="$ANALYSIS_DIR/with_all_samples_admix"
-CHROM_MAP="$ANALYSIS_DIR/admix_chromosomes.tsv"
-UPDATE_CHR="$ANALYSIS_DIR/admix_update_chr.tsv"
+MODERN_ADMIX_PREFIX="$ANALYSIS_DIR/${MODERN_LABEL}_admix"
+ALL_ADMIX_PREFIX="$ANALYSIS_DIR/${ALL_LABEL}_admix"
+CHROM_MAP="$ANALYSIS_DIR/admix_t_chromosomes.tsv"
+UPDATE_CHR="$ANALYSIS_DIR/admix_t_update_chr.tsv"
 
 prepare_dataset() {
     local label=$1
@@ -36,7 +38,7 @@ prepare_dataset() {
 
     echo "${label} VCF variants: $(bcftools index -n "$input_vcf")"
 
-    if [ "$label" = "modern" ]; then
+    if [ "$label" = "$MODERN_LABEL" ]; then
         "$PLINK" --vcf "$input_vcf" --geno "$MISSINGNESS" --make-bed \
             --set-missing-var-ids '@:#_$1_$2' \
             --threads "$PLINK_THREADS" --out "$prefix" --allow-extra-chr
@@ -61,12 +63,12 @@ prepare_admixture_dataset() {
 
 run_modern_admixture() {
     local prefix="$MODERN_ADMIX_PREFIX"
-    local modern_prefix="$ANALYSIS_DIR/modern"
-    local cv_table="$ANALYSIS_DIR/modern_admixture_cv.tsv"
+    local modern_prefix="$ANALYSIS_DIR/$MODERN_LABEL"
+    local cv_table="$ANALYSIS_DIR/${MODERN_LABEL}_admixture_cv_t.tsv"
 
     printf "K\tCV_error\n" > "$cv_table"
     for K in $(seq "$K_MIN" "$K_MAX"); do
-        log_file="$ANALYSIS_DIR/modern_admixture_K${K}.log"
+        log_file="$ANALYSIS_DIR/${MODERN_LABEL}_admixture_K${K}.log"
         (
             cd "$ANALYSIS_DIR"
             "$ADMIXTURE" -j"$ADMIXTURE_THREADS" --cv "$(basename "$prefix").bed" "$K" \
@@ -87,10 +89,10 @@ run_modern_admixture() {
 }
 
 run_pca_projection() {
-    local modern_prefix="$ANALYSIS_DIR/modern"
-    local all_prefix="$ANALYSIS_DIR/with_all_samples"
-    local pca_prefix="$ANALYSIS_DIR/modern_pca"
-    local projection_prefix="$ANALYSIS_DIR/with_all_samples_pca_projection"
+    local modern_prefix="$ANALYSIS_DIR/$MODERN_LABEL"
+    local all_prefix="$ANALYSIS_DIR/$ALL_LABEL"
+    local pca_prefix="$ANALYSIS_DIR/${MODERN_LABEL}_pca"
+    local projection_prefix="$ANALYSIS_DIR/${ALL_LABEL}_pca_projection"
     local score_end=$((5 + PCA_COMPONENTS))
 
     if [ ! -x "$PLINK2" ]; then
@@ -112,7 +114,7 @@ run_pca_projection() {
         --score-col-nums "6-${score_end}" --out "$projection_prefix"
 
     python3 - "$projection_prefix.sscore" "$ANCIENT_SAMPLES" \
-        "$ANALYSIS_DIR/ancient_pca_projection.tsv" <<'PY'
+        "$ANALYSIS_DIR/ancient_t_pca_projection.tsv" <<'PY'
 import sys
 
 score_file, ancient_text, output_file = sys.argv[1:]
@@ -132,11 +134,11 @@ PY
 
     echo "Modern PCA reference: ${pca_prefix}.eigenvec"
     echo "All-sample PCA projection: ${projection_prefix}.sscore"
-    echo "Ancient PCA projection: $ANALYSIS_DIR/ancient_pca_projection.tsv"
+    echo "Ancient PCA projection: $ANALYSIS_DIR/ancient_t_pca_projection.tsv"
 }
 
 project_all_samples() {
-    local all_prefix="$ANALYSIS_DIR/with_all_samples"
+    local all_prefix="$ANALYSIS_DIR/$ALL_LABEL"
 
     # Projection requires identical SNP IDs and order in both datasets.
     if ! cmp -s "${MODERN_ADMIX_PREFIX}.bim" "${ALL_ADMIX_PREFIX}.bim"; then
@@ -146,7 +148,7 @@ project_all_samples() {
 
     for K in $(seq "$K_MIN" "$K_MAX"); do
         cp "${MODERN_ADMIX_PREFIX}.${K}.P" "${ALL_ADMIX_PREFIX}.${K}.P.in"
-        projection_log="$ANALYSIS_DIR/with_all_samples_projection_K${K}.log"
+        projection_log="$ANALYSIS_DIR/${ALL_LABEL}_projection_K${K}_t.log"
         (
             cd "$ANALYSIS_DIR"
             "$ADMIXTURE" -j"$ADMIXTURE_THREADS" -P "$(basename "$ALL_ADMIX_PREFIX").bed" "$K" \
@@ -159,7 +161,7 @@ project_all_samples() {
             return 1
         fi
 
-        ancient_table="$ANALYSIS_DIR/ancient_projection_K${K}.tsv"
+        ancient_table="$ANALYSIS_DIR/ancient_t_projection_K${K}.tsv"
         awk -v ancient="$ANCIENT_SAMPLES" -v k="$K" '
         BEGIN {
             split(ancient, names, ",")
@@ -185,15 +187,15 @@ project_all_samples() {
 }
 
 mkdir -p "$ANALYSIS_DIR"
-prepare_dataset "modern" "$MODERN_VCF"
-awk '!seen[$1]++ { print $1, ++n }' "$ANALYSIS_DIR/modern.bim" > "$CHROM_MAP"
+prepare_dataset "$MODERN_LABEL" "$MODERN_VCF"
+awk '!seen[$1]++ { print $1, ++n }' "$ANALYSIS_DIR/${MODERN_LABEL}.bim" > "$CHROM_MAP"
 awk 'NR == FNR { new[$1] = $2; next } ($1 in new) { print $2, new[$1] }' \
-    "$CHROM_MAP" "$ANALYSIS_DIR/modern.bim" > "$UPDATE_CHR"
-prepare_admixture_dataset "$ANALYSIS_DIR/modern" "$MODERN_ADMIX_PREFIX"
+    "$CHROM_MAP" "$ANALYSIS_DIR/${MODERN_LABEL}.bim" > "$UPDATE_CHR"
+prepare_admixture_dataset "$ANALYSIS_DIR/$MODERN_LABEL" "$MODERN_ADMIX_PREFIX"
 run_modern_admixture
 
-prepare_dataset "with_all_samples" "$ALL_VCF"
-prepare_admixture_dataset "$ANALYSIS_DIR/with_all_samples" "$ALL_ADMIX_PREFIX"
+prepare_dataset "$ALL_LABEL" "$ALL_VCF"
+prepare_admixture_dataset "$ANALYSIS_DIR/$ALL_LABEL" "$ALL_ADMIX_PREFIX"
 run_pca_projection
 project_all_samples
 

@@ -40,6 +40,26 @@ suffix, for example `MyHare_t_modern.vcf.gz` and
 `MyHare_t_with_all_samples.vcf.gz`. Use `PARALLEL_JOBS=16` to run up to 16
 sample jobs concurrently.
 
+Complete `_t` test run:
+
+```bash
+PARALLEL_JOBS=16 bash scr_16_run_test_population_pipeline.sh
+```
+
+The launcher waits for the test VCF stage to finish, verifies the final
+all-sample VCF and index, then runs PCA/ADMIXTURE, plots, and Dsuite in order.
+Fbranch is intentionally excluded.
+
+The Fbranch script is intentionally not changed in this test branch. When it
+is needed, use the grouped tree already present on the server:
+
+```bash
+TREE_SOURCE=/NatureUsers/ltursunova/hare_work/subset_parallel/pipeline_bulletproof_final/astral_species_tree_with_all_samples_grouped_modern_ancient_separate.tre \
+VCF="$HOME/hare_work/MyHare_t_with_all_samples.vcf.gz" \
+OUT_DIR="$HOME/hare_work/dsuite_results_t/fbranch_t" \
+bash scr_15_fbranch_new_trees.sh
+```
+
 ### `scr_12_pca_admixture.sh`
 
 Runs PCA on modern samples using the modern-selected positions, then projects
@@ -48,21 +68,22 @@ all samples onto the modern PCA axes with PLINK 2 allele weights. PLINK applies
 samples and projects all samples for every K using the fixed modern `.P`
 matrix after converting chromosome names to numeric codes; K is selected
 manually from the CV plot. Ancient-only results are saved to
-`population_analysis/ancient_projection_K<K>.tsv` and
-`population_analysis/ancient_pca_projection.tsv`.
+`population_analysis_t/ancient_t_projection_K<K>.tsv` and
+`population_analysis_t/ancient_t_pca_projection.tsv`.
 
 ### `scr_13_population_plots.R`
 
 Creates PCA scatter plots and ADMIXTURE ancestry-proportion plots for both
-datasets using the outputs from `scr_12_pca_admixture.sh`.
+datasets using the outputs from `scr_12_pca_admixture.sh` in
+`population_analysis_t/`.
 
 ### `scr_14_dsuite.sh`
 
-Runs `Dsuite Dtrios` on `MyHare_with_all_samples.vcf.gz` using both
+Runs `Dsuite Dtrios` on `MyHare_t_with_all_samples.vcf.gz` using both
 `for_data/sets_hare.txt` and `for_data/sets_krol.txt`. The set files define the
 population/species assignments and outgroup; samples marked `xxx` are ignored
-by Dsuite. Results are written to `dsuite_results/sets_hare_*` and
-`dsuite_results/sets_krol_*`.
+by Dsuite. Results are written to `dsuite_results_t/sets_hare_t_*` and
+`dsuite_results_t/sets_krol_t_*`.
 
 ### `scr_15_fbranch_new_trees.sh`
 

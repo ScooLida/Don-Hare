@@ -3,9 +3,11 @@
 # The script expects outputs from scr_12_pca_admixture.sh.
 
 # Configuration
-ANALYSIS_DIR <- "./population_analysis"
-PLOT_DIR <- file.path(ANALYSIS_DIR, "plots")
-DATASETS <- c("modern", "with_all_samples")
+ANALYSIS_DIR <- Sys.getenv("ANALYSIS_DIR", "./population_analysis_t")
+PLOT_DIR <- file.path(ANALYSIS_DIR, "plots_t")
+MODERN_LABEL <- Sys.getenv("MODERN_LABEL", "modern_t")
+ALL_LABEL <- Sys.getenv("ALL_LABEL", "with_all_samples_t")
+DATASETS <- c(MODERN_LABEL, ALL_LABEL)
 K_VALUES <- 2:15
 
 if (!requireNamespace("ggplot2", quietly = TRUE)) {
@@ -15,15 +17,17 @@ if (!requireNamespace("ggplot2", quietly = TRUE)) {
 dir.create(PLOT_DIR, recursive = TRUE, showWarnings = FALSE)
 
 read_pca <- function(dataset) {
-  if (dataset == "modern") {
-    filename <- file.path(ANALYSIS_DIR, "modern_pca.eigenvec")
+  if (dataset == MODERN_LABEL) {
+    filename <- file.path(ANALYSIS_DIR, paste0(MODERN_LABEL, "_pca.eigenvec"))
     if (!file.exists(filename)) stop("PCA file not found: ", filename)
     pca <- read.table(filename, header = TRUE, stringsAsFactors = FALSE,
                       check.names = FALSE, comment.char = "")
     names(pca)[names(pca) %in% c("#FID", "FID")] <- "Family"
     names(pca)[names(pca) == "IID"] <- "Sample"
   } else {
-    filename <- file.path(ANALYSIS_DIR, "with_all_samples_pca_projection.sscore")
+    filename <- file.path(
+      ANALYSIS_DIR, paste0(ALL_LABEL, "_pca_projection.sscore")
+    )
     if (!file.exists(filename)) stop("PCA projection file not found: ", filename)
     pca <- read.table(filename, header = TRUE, stringsAsFactors = FALSE,
                       check.names = FALSE, comment.char = "")
