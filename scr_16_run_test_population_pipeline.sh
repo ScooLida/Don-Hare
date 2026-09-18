@@ -58,6 +58,11 @@ if [ "$WAIT_FOR_VCF" = "1" ]; then
     }
     wait_for_vcf
 else
+    if pgrep -f '[s]cr_11_bam_to_vcf_test\.sh' >/dev/null 2>&1; then
+        echo "Error: scr_11_bam_to_vcf_test.sh is already running." >&2
+        echo "Use WAIT_FOR_VCF=1 to wait for it instead of starting a second job." >&2
+        exit 1
+    fi
     echo "[1/4] Calling per-sample VCFs and creating ${DATA_PREFIX}_with_all_samples.vcf.gz"
     bash "$SCRIPT_DIR/scr_11_bam_to_vcf_test.sh"
 fi

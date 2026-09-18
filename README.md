@@ -57,6 +57,9 @@ the launcher in wait mode instead of starting a second VCF job:
 WAIT_FOR_VCF=1 bash scr_16_run_test_population_pipeline.sh
 ```
 
+The launcher refuses to start a second `scr_11_bam_to_vcf_test.sh` process when
+one is already running.
+
 The Fbranch script is intentionally not changed in this test branch. When it
 is needed, use the grouped tree already present on the server:
 
