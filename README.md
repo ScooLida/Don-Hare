@@ -50,6 +50,13 @@ The launcher waits for the test VCF stage to finish, verifies the final
 all-sample VCF and index, then runs PCA/ADMIXTURE, plots, and Dsuite in order.
 Fbranch is intentionally excluded.
 
+If `scr_11_bam_to_vcf_test.sh` is already running in another terminal, start
+the launcher in wait mode instead of starting a second VCF job:
+
+```bash
+WAIT_FOR_VCF=1 bash scr_16_run_test_population_pipeline.sh
+```
+
 The Fbranch script is intentionally not changed in this test branch. When it
 is needed, use the grouped tree already present on the server:
 
