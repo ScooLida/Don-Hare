@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
-# Concatenate the 13 linked mitochondrial PCGs with gene partitions and build
-# a primary ML tree. The existing ASTRAL output is intentionally untouched.
+# Concatenate the 13 non-overlapping mitochondrial PCGs with gene partitions
+# and build the primary partitioned ML tree.
 set -Eeuo pipefail
 
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 OUT="${1:-${MITO_OUT:-/NatureUsers/ltursunova/hare_work/mito_pcg_analysis}}"
 ALIGN_DIR="${ALIGN_DIR:-$OUT/alignments}"
 CONCAT_DIR="${CONCAT_DIR:-$OUT/concatenated}"
-PCG_BED="${PCG_BED:-$SCRIPT_DIR/for_data/scr_31_hare_l_europaeus_NC_004028.1_PCGs.bed}"
+UNIQUE_PCG_BED="${UNIQUE_PCG_BED:-$OUT/pcg_unique_sites.bed}"
 THREADS="${THREADS:-8}"
 BOOTSTRAPS="${BOOTSTRAPS:-1000}"
 
@@ -17,7 +17,7 @@ die() {
 }
 
 [[ -d "$ALIGN_DIR" ]] || die "Alignment directory not found: $ALIGN_DIR"
-[[ -s "$PCG_BED" ]] || die "PCG BED not found: $PCG_BED"
+[[ -s "$UNIQUE_PCG_BED" ]] || die "Unique-site PCG BED not found: $UNIQUE_PCG_BED"
 command -v python3 >/dev/null 2>&1 || die "python3 is required"
 
 if [[ -n "${IQTREE_CMD:-}" ]]; then
@@ -52,7 +52,7 @@ else
     [[ -n "$IQTREE_CMD" ]] || die "Neither iqtree2 nor iqtree was found in conda environments"
 fi
 
-mapfile -t GENES < <(awk 'BEGIN {FS="\t"} !/^#/ && NF >= 5 {print $1}' "$PCG_BED")
+mapfile -t GENES < <(awk 'BEGIN {FS="\t"} !/^#/ && NF >= 5 {print $1}' "$UNIQUE_PCG_BED")
 (( ${#GENES[@]} == 13 )) || die "Expected 13 PCGs, found ${#GENES[@]}"
 
 mkdir -p "$CONCAT_DIR"
@@ -67,7 +67,7 @@ python3 "$SCRIPT_DIR/concat_fasta_partitions.py" \
     -s "$CONCAT_DIR/pcg_concat.fa" \
     -st DNA \
     -p "$CONCAT_DIR/pcg_partitions.txt" \
-    -m MFP \
+    -m MFP+MERGE \
     -B "$BOOTSTRAPS" \
     --alrt "$BOOTSTRAPS" \
     -T "$THREADS" \

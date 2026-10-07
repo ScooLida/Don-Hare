@@ -133,16 +133,17 @@ overrides.
 
 Runs the mitochondrial stage in order:
 
-1. `scr_31_mito_pcg_astral.sh` calls variants, creates masked consensus
-   sequences, extracts the 13 PCGs, aligns them, and builds the per-PCG trees
-   plus the ASTRAL tree.
+1. `scr_31_mito_pcg_ml.sh` calls variants with `DP >= 3`, creates masked
+   consensus sequences, assigns overlapping reference sites to the first PCG
+   in BED order, extracts the 13 non-overlapping PCGs, and aligns them.
 2. `scr_32_mito_pcg_concat.sh` concatenates the 13 retained PCG alignments
-   using one partition per gene and builds the primary ML tree.
+   using one partition per gene and builds the primary ML tree with
+   `MFP+MERGE`, SH-aLRT 1000, and UFBoot 1000. No ASTRAL tree is produced.
 
 All intermediate data are retained under `OUT`: `vcf`, `consensus`,
-`gene_fastas`, `alignments`, `gene_trees`, and `astral`. The launcher refuses
-to overwrite a partial existing output. Set `REBUILD=1` only for an intentional
-rerun from BAM files.
+`gene_fastas`, `alignments`, `pcg_unique_sites.bed`, and `concatenated`. The
+launcher refuses to overwrite a partial existing output. Set `REBUILD=1` only
+for an intentional rerun from BAM files.
 
 Run on the compute environment with the default `/NatureUsers` paths:
 

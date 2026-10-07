@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Post-mapping mitochondrial pipeline:
-# BAM -> variants -> low-depth-masked consensus -> 13 PCGs -> MAFFT ->
-# IQ-TREE gene trees and ASTRAL species tree.
+# BAM -> variants -> low-depth-masked consensus -> non-overlapping PCGs ->
+# MAFFT. The final concatenated ML tree is built by scr_32.
 set -Eeuo pipefail
 shopt -s nullglob globstar
 
@@ -23,12 +23,8 @@ THREADS="${THREADS:-8}"
 # Ancient-DNA consensus filters. Adjust to the experiment if necessary.
 MIN_MQ="${MIN_MQ:-25}"
 MIN_BQ="${MIN_BQ:-20}"
-MIN_DP="${MIN_DP:-2}"
+MIN_DP="${MIN_DP:-3}"
 MIN_QUAL="${MIN_QUAL:-30}"
-
-# ASTRAL jar available on sy2. It can be overridden at runtime:
-# ASTRAL_JAR=/actual/path/astral.jar bash scr_31_mito_pcg_astral.sh
-ASTRAL_JAR="${ASTRAL_JAR:-$HOME/Astral/astral.5.7.8.jar}"
 
 die() {
     printf 'ERROR: %s\n' "$*" >&2
@@ -102,34 +98,62 @@ run_tool() {
     fi
 }
 
-for cmd in samtools bcftools mafft java realpath awk tr rev sort; do
+for cmd in samtools bcftools mafft realpath awk tr rev sort; do
     resolve_tool "$cmd" || die "Command not found in current PATH or conda environments: $cmd"
 done
-if resolve_tool iqtree2; then
-    IQTREE_CMD=iqtree2
-elif resolve_tool iqtree; then
-    IQTREE_CMD=iqtree
-else
-    die "Neither iqtree2 nor iqtree was found in current PATH or conda environments"
-fi
 
 [[ -s "$REF" ]] || die "Reference not found: $REF"
 [[ -s "$PCG_BED" ]] || die "PCG BED not found: $PCG_BED"
 [[ -d "$BAM_ROOT" ]] || die "BAM directory not found: $BAM_ROOT"
 [[ -s "$SAMPLE_LIST" ]] || die "Sample list not found: $SAMPLE_LIST"
-[[ -s "$ASTRAL_JAR" ]] || die "ASTRAL jar not found: $ASTRAL_JAR"
-
 # Intermediate files are deliberately retained for concatenated analysis,
 # troubleshooting, and reproducibility. This script never cleans OUT.
 mkdir -p "$OUT" "$OUT/vcf" "$OUT/consensus" "$OUT/gene_fastas" \
-    "$OUT/alignments" "$OUT/gene_trees" "$OUT/astral"
+    "$OUT/alignments"
 
 [[ -s "${REF}.fai" ]] || run_tool samtools faidx "$REF"
 
 # BED format: gene<TAB>contig<TAB>start<TAB>end<TAB>strand
-# Coordinates are 0-based and half-open. Keep overlapping genes as separate
-# rows; each row is processed as an independent gene for ASTRAL.
-mapfile -t GENES < <(run_tool awk 'BEGIN {FS="\t"} !/^#/ && NF >= 5 {print $1}' "$PCG_BED")
+# Coordinates are 0-based and half-open. Overlapping reference positions are
+# assigned to the first gene in BED order and removed from later genes.
+UNIQUE_PCG_BED="$OUT/pcg_unique_sites.bed"
+run_tool awk '
+    BEGIN { FS=OFS="\t"; previous_contig=""; previous_start=-1; previous_end=0 }
+    !/^#/ && NF >= 5 {
+        if ($3 !~ /^[0-9]+$/ || $4 !~ /^[0-9]+$/ || $3 >= $4) {
+            printf "Invalid BED coordinates at line %d\n", NR > "/dev/stderr"
+            bad=1
+            next
+        }
+        if ($5 != "+" && $5 != "-") {
+            printf "Invalid strand at line %d: %s\n", NR, $5 > "/dev/stderr"
+            bad=1
+            next
+        }
+        if (seen && ($2 != previous_contig || $3 < previous_start)) {
+            printf "PCG BED must be sorted by contig and start at line %d\n", NR > "/dev/stderr"
+            bad=1
+            next
+        }
+        if (!seen || $2 != previous_contig) {
+            previous_end=0
+        }
+        unique_start=($3 < previous_end ? previous_end : $3)
+        if (unique_start >= $4) {
+            printf "Gene has no unique sites after overlap removal: %s\n", $1 > "/dev/stderr"
+            bad=1
+            next
+        }
+        print $1, $2, unique_start, $4, $5
+        seen=1
+        previous_contig=$2
+        previous_start=$3
+        if ($4 > previous_end) previous_end=$4
+    }
+    END { exit bad }
+' "$PCG_BED" > "$UNIQUE_PCG_BED" || die "Invalid or unsorted PCG BED"
+
+mapfile -t GENES < <(run_tool awk 'BEGIN {FS="\t"} !/^#/ && NF >= 5 {print $1}' "$UNIQUE_PCG_BED")
 (( ${#GENES[@]} == 13 )) || die "PCG BED must contain exactly 13 genes; found ${#GENES[@]}"
 
 run_tool awk '
@@ -286,7 +310,7 @@ for bam in "${BAMS[@]}"; do
             sequence=$(printf '%s' "$sequence" | run_tool rev | run_tool tr 'ACGTacgt' 'TGCAtgca')
         fi
         printf '>%s\n%s\n' "$sample" "$sequence" >> "$OUT/gene_fastas/${gene}.fa"
-    done < <(run_tool awk 'BEGIN {FS=OFS="\t"} !/^#/ && NF >= 5 {print $1, $2, $3, $4, $5}' "$PCG_BED")
+        done < <(run_tool awk 'BEGIN {FS=OFS="\t"} !/^#/ && NF >= 5 {print $1, $2, $3, $4, $5}' "$UNIQUE_PCG_BED")
 done
 
 printf '[alignment] Aligning each PCG with MAFFT\n'
@@ -296,30 +320,6 @@ for gene in "${GENES[@]}"; do
       > "$OUT/alignments/${gene}.aln.fa"
 done
 
-printf '[gene trees] Running IQ-TREE ModelFinder for each PCG\n'
-for gene in "${GENES[@]}"; do
-    run_tool "$IQTREE_CMD" \
-        -s "$OUT/alignments/${gene}.aln.fa" \
-        -st DNA \
-        -m MFP \
-        -B 1000 \
-        --alrt 1000 \
-        -T "$THREADS" \
-        --prefix "$OUT/gene_trees/${gene}"
-done
-
-all_gene_trees="$OUT/astral/all_gene_trees.treefile"
-: > "$all_gene_trees"
-for treefile in "$OUT"/gene_trees/*.treefile; do
-    [[ -s "$treefile" ]] || continue
-    run_tool awk '1' "$treefile" >> "$all_gene_trees"
-done
-[[ -s "$all_gene_trees" ]] || die "No gene trees were generated"
-
-run_tool java -jar "$ASTRAL_JAR" \
-    -i "$all_gene_trees" \
-    -o "$OUT/astral/astral.tree"
-
-printf '\nFinished.\nGene trees: %s\nASTRAL tree: %s\n' \
-    "$OUT/gene_trees/" \
-    "$OUT/astral/astral.tree"
+printf '\nFinished.\nUnique-site BED: %s\nAlignments: %s\n' \
+    "$UNIQUE_PCG_BED" \
+    "$OUT/alignments/"

@@ -29,31 +29,31 @@ has_files() {
 
 has_complete_pcg_inputs() {
     local gene
-    [[ -s "$OUT/astral/astral.tree" ]] || return 1
+    [[ -s "$OUT/pcg_unique_sites.bed" ]] || return 1
     while IFS= read -r gene; do
         [[ -s "$OUT/alignments/${gene}.aln.fa" ]] || return 1
-    done < <(awk 'BEGIN {FS="\t"} !/^#/ && NF >= 5 {print $1}' "$PCG_BED")
+    done < <(awk 'BEGIN {FS="\t"} !/^#/ && NF >= 5 {print $1}' "$OUT/pcg_unique_sites.bed")
 }
 
 if [[ "$REBUILD" != 1 ]] && has_complete_pcg_inputs; then
     printf '[mito pipeline] Existing PCG intermediates found; reusing them.\n'
 else
     if [[ "$REBUILD" != 1 ]]; then
-        for directory in vcf consensus gene_fastas alignments gene_trees astral; do
+        for directory in vcf consensus gene_fastas alignments concatenated; do
             if has_files "$OUT/$directory"; then
                 die "Existing mitochondrial output detected in $OUT/$directory; refusing to overwrite. Set REBUILD=1 only for an intentional rerun."
             fi
         done
     fi
     export OUT PCG_BED
-    bash "$SCRIPT_DIR/scr_31_mito_pcg_astral.sh"
+    bash "$SCRIPT_DIR/scr_31_mito_pcg_ml.sh"
 fi
 
-for directory in vcf consensus gene_fastas alignments gene_trees astral; do
+for directory in vcf consensus gene_fastas alignments; do
     [[ -d "$OUT/$directory" ]] || die "Missing output directory after scr_31: $OUT/$directory"
 done
 
-[[ -s "$OUT/astral/astral.tree" ]] || die "ASTRAL tree was not produced: $OUT/astral/astral.tree"
+[[ -s "$OUT/pcg_unique_sites.bed" ]] || die "Unique PCG BED was not produced: $OUT/pcg_unique_sites.bed"
 
 PCG_BED="$PCG_BED" bash "$SCRIPT_DIR/scr_32_mito_pcg_concat.sh" "$OUT"
 
@@ -61,5 +61,5 @@ PCG_BED="$PCG_BED" bash "$SCRIPT_DIR/scr_32_mito_pcg_concat.sh" "$OUT"
     die "Concatenated ML tree was not produced: $OUT/concatenated/pcg_concat.treefile"
 
 printf '\n[mito pipeline] Finished successfully.\n'
-printf '[mito pipeline] Preserved intermediate data: %s/{vcf,consensus,gene_fastas,alignments,gene_trees,astral}\n' "$OUT"
+printf '[mito pipeline] Preserved intermediate data: %s/{vcf,consensus,gene_fastas,alignments}\n' "$OUT"
 printf '[mito pipeline] Concatenated tree: %s\n' "$OUT/concatenated/pcg_concat.treefile"
